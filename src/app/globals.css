@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+/*
+ * Dark mode is class-driven rather than media-driven, because the toggle has to
+ * win over the operating system. `ThemeScript` in the root layout sets the class
+ * before first paint so there is no flash of the wrong theme.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * The palette.
+ *
+ * Warm paper rather than white, ink rather than black. Nothing here is
+ * saturated: the interface is meant to disappear behind the writing, and the
+ * only colour with any real presence is the one each writer picks for their own
+ * name. Contrast on text/background clears WCAG AA comfortably in both themes.
+ */
+@theme {
+  --color-paper: #faf7f2;
+  --color-surface: #ffffff;
+  --color-surface-sunk: #f3efe8;
+  --color-ink: #1e1b17;
+  --color-ink-soft: #4a443c;
+  --color-ink-muted: #756c60;
+  --color-rule: #e4dcd0;
+  --color-rule-strong: #d2c7b7;
+  --color-brand: #7c5a3a;
+  --color-brand-soft: #a07a54;
+  --color-danger: #9b3b2f;
+  --color-success: #3f6b4a;
+
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: var(--font-literata), Georgia, "Times New Roman", serif;
+
+  --radius-card: 0.75rem;
+}
+
+.dark {
+  --color-paper: #14120f;
+  --color-surface: #1b1815;
+  --color-surface-sunk: #221e1a;
+  --color-ink: #ece7df;
+  --color-ink-soft: #c6bfb4;
+  --color-ink-muted: #968d80;
+  --color-rule: #302b25;
+  --color-rule-strong: #443d34;
+  --color-brand: #c9a37a;
+  --color-brand-soft: #a98456;
+  --color-danger: #d98878;
+  --color-success: #8fb89a;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* Long-form reading deserves proper typographic defaults. */
+    font-feature-settings: "kern", "liga", "onum";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* A visible, consistent focus ring everywhere — never `outline: none`. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-brand) 25%, transparent);
+  }
+
+  /* Respect people who have asked their system to stop moving things. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /*
+   * The reading surface.
+   *
+   * Every typographic value comes from CSS custom properties set per book, so
+   * one book can be a classic novel and the next a typewriter carbon copy
+   * without any conditional class names.
+   */
+  .book-prose {
+    font-family: var(--book-body-font, var(--font-serif));
+    font-size: var(--book-base-size, 18px);
+    line-height: var(--book-line-height, 1.75);
+    color: var(--color-ink);
+    /* Roughly 62–68 characters: the range long-form text reads best at. */
+    max-width: 34em;
+  }
+
+  .book-prose p {
+    margin-bottom: var(--book-paragraph-gap, 1em);
+    text-indent: 0;
+  }
+
+  /* Printed-novel style: indent every paragraph except the first of a block. */
+  .book-prose[data-indent="true"] p + p {
+    text-indent: var(--book-paragraph-indent, 1.5em);
+    margin-bottom: 0;
+  }
+
+  .book-prose h1,
+  .book-prose h2,
+  .book-prose h3 {
+    font-family: var(--book-heading-font, var(--font-serif));
+    font-weight: 600;
+    line-height: 1.25;
+    margin-block: 1.4em 0.5em;
+  }
+
+  .book-prose h1 { font-size: 1.5em; }
+  .book-prose h2 { font-size: 1.28em; }
+  .book-prose h3 { font-size: 1.12em; }
+
+  .book-prose blockquote {
+    margin: 1.2em 0;
+    padding-left: 1.1em;
+    border-left: 2px solid var(--color-rule-strong);
+    color: var(--color-ink-soft);
+    font-style: italic;
+  }
+
+  .book-prose ul,
+  .book-prose ol {
+    margin: 0 0 1em 1.4em;
+  }
+  .book-prose ul { list-style: disc; }
+  .book-prose ol { list-style: decimal; }
+  .book-prose li { margin-bottom: 0.35em; }
+
+  .book-prose a {
+    color: var(--color-brand);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  .book-prose img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin: 1.2em 0;
+  }
+
+  .book-prose em { font-style: italic; }
+  .book-prose strong { font-weight: 600; }
+  .book-prose u { text-decoration: underline; text-underline-offset: 0.15em; }
+
+  /* The editor shares the reading typography so writing looks like the book. */
+  .tiptap {
+    outline: none;
+    min-height: 24rem;
+  }
+
+  .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-ink-muted);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
+  /*
+   * Two-page spread. Below the breakpoint this collapses to one column — a
+   * phone should show a single readable page, not a shrunken spread.
+   */
+  .book-spread {
+    column-count: 1;
+  }
+
+  @media (min-width: 1024px) {
+    .book-spread[data-spread="true"] {
+      column-count: 2;
+      column-gap: 4rem;
+      column-rule: 1px solid var(--color-rule);
+    }
+  }
+}
+
+@media print {
+  /* Print from the Reading view gives a usable draft without the app around it. */
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+    color: black;
+  }
+
+  .book-prose {
+    max-width: none;
+  }
+}
