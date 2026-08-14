@@ -549,6 +549,24 @@ npm run verify      # lint + typecheck + test + production build
 - **`dictionary.test.ts`** — the offline spell checker, half of it asserting what
   it *declines* to touch.
 
+`npm run test:e2e` adds browser tests, including
+**`shared-book.spec.ts`** — two real accounts, one shared book, both people
+opening it. It exists because of a bug nothing else could see: `getBook` asked
+for *the memberships of this book* rather than *my membership of this book*, and
+since a member may see everyone in the book, that returned one row while a book
+was solo and two the moment somebody joined. `maybeSingle()` answers a multi-row
+result with `null`, so the book 404'd for **both** people at once, the instant it
+stopped being private. Unit tests are pure logic, the SQL test proves the
+database says yes, and every other browser test is signed out or alone — it took
+two people in one book.
+
+That spec signs in against the configured Supabase project, so it creates four
+accounts (`e2e-author-*` and `e2e-friend-*` at `@journal-letter.test`). The
+addresses are fixed rather than random, one pair per Playwright project, so they
+are made once and reused instead of accumulating on every run; the book is
+created fresh and deleted at the end. Delete those four accounts freely — the
+next run recreates them.
+
 The database authorization tests live in
 `supabase/tests/rls_authorization_test.sql` — see
 [the release-blocking test](#the-release-blocking-test).

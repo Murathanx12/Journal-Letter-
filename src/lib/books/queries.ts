@@ -3,6 +3,7 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
+import { getSessionUser } from "@/lib/auth/session";
 import { parseCover, parseDesign, resolveDesign, type BookCover, type BookDesign, type ResolvedDesign } from "@/lib/design/theme";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums, Tables } from "@/lib/supabase/database.types";
@@ -74,10 +75,22 @@ function toBook(row: Tables<"books">, role: MemberRole): Book {
  */
 export const getBook = cache(async (bookId: string): Promise<Book> => {
   const supabase = await createClient();
+  const user = await getSessionUser();
+  if (!user) notFound();
 
   const [{ data: book }, { data: membership }] = await Promise.all([
     supabase.from("books").select("*").eq("id", bookId).maybeSingle(),
-    supabase.from("book_members").select("role").eq("book_id", bookId).maybeSingle(),
+    // Scoped to *this* reader. A member can see everyone in the book, so
+    // without `user_id` this asks for "the memberships of this book" — which is
+    // more than one row the moment a second person joins, and `maybeSingle()`
+    // answers a multi-row result with null. That turned a shared book into a
+    // 404 for everybody in it, the instant it stopped being solo.
+    supabase
+      .from("book_members")
+      .select("role")
+      .eq("book_id", bookId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
 
   if (!book || !membership) notFound();
@@ -146,8 +159,18 @@ export type LibraryBook = Book & {
  */
 export async function getLibrary(): Promise<LibraryBook[]> {
   const supabase = await createClient();
+  const user = await getSessionUser();
+  if (!user) return [];
 
-  const { data: memberships } = await supabase.from("book_members").select("book_id, role");
+  // `user_id` matters as much here as in `getBook`: a member can see everyone in
+  // their books, so an unscoped select returns other people's rows too, and the
+  // map below would end up holding somebody else's role — which decides whether
+  // this reader is shown as the owner and whether they may write.
+  const { data: memberships } = await supabase
+    .from("book_members")
+    .select("book_id, role")
+    .eq("user_id", user.id);
+
   if (!memberships || memberships.length === 0) return [];
 
   const roleByBook = new Map(memberships.map((m) => [m.book_id, m.role]));
