@@ -351,16 +351,20 @@ supabase gen types typescript --project-id <ref> --schema public \
 
 ## Google sign-in setup
 
-1. Google Cloud Console → *APIs & Services* → *Credentials* → *Create OAuth
-   client ID* → **Web application**.
-2. Authorised redirect URI:
-   `https://<your-project-ref>.supabase.co/auth/v1/callback`
-3. In Supabase → *Authentication → Providers → Google*, paste the client ID and
-   secret.
+**"Continue with Google" is hidden by default.** Until the provider is actually
+enabled, Supabase answers every attempt with `provider is not enabled`, and a
+button that can only fail is worse than no button. Turn it on in three steps:
 
-No environment variable is needed in this application — Supabase holds those
-credentials. Sign-in requests only `email profile`; it never asks for Drive
-access.
+1. Google Cloud Console → *APIs & Services* → *Credentials* → *Create OAuth
+   client ID* → **Web application**. Authorised redirect URI:
+   `https://<your-project-ref>.supabase.co/auth/v1/callback`
+2. In Supabase → *Authentication → Providers → Google*, paste the client ID and
+   secret and enable it.
+3. Set `GOOGLE_AUTH_ENABLED=true` and redeploy.
+
+Sign-in requests only `email profile`; it never asks for Drive access. The
+Drive scope is requested separately and only when somebody exports to Google
+Docs.
 
 ---
 
@@ -399,9 +403,21 @@ journal, and no telemetry contains journal contents.
 `anthropic-provider.ts` is one implementation. Adding another provider means
 writing one more class.
 
-**The guard rails matter more than the prompt.** The prompt asks the model to
-preserve slang, pet names, mixed languages and repeated letters.
-`spelling-guard.ts` assumes it sometimes will not.
+**How it behaves.** Nothing is applied for you and nothing is blocked. A
+suspected typo is underlined where it sits in the sentence; clicking it swaps in
+the correction. That swap is an ordinary editor transaction, so **Ctrl/⌘+Z undoes
+it exactly like it undoes your own typing**, and redo re-applies it. Highlights
+follow the text as you keep writing, and vanish if you edit that word yourself.
+
+Because corrections are ordinary edits, the pre-correction document is captured
+once, the first time a suggestion is accepted, so "Restore my original words" and
+"Export original writing" still work. On save the corrected/original label is
+recomputed by comparison, so undoing every suggestion correctly reports the entry
+as original again.
+
+**The guard rails decide what is even suggested, and matter more than the
+prompt.** The prompt asks the model to preserve slang, pet names, mixed languages
+and repeated letters. `spelling-guard.ts` assumes it sometimes will not.
 
 In the default **spelling only** mode, every individual change must be provably
 typographical before a human is even shown it:
