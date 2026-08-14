@@ -1,5 +1,4 @@
 import { BookOpen, CalendarDays, FileDown, Lock, PenLine, Users } from "lucide-react";
-import Link from "next/link";
 
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { ButtonLink } from "@/components/ui/button";

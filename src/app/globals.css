@@ -53,6 +53,14 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    /* Author accents are expressed with `light-dark()`, which only resolves
+       when `color-scheme` is declared. It also gives us correctly themed form
+       controls and scrollbars for free. */
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
