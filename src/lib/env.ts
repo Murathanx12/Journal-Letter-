@@ -63,6 +63,16 @@ export const featureFlags = {
   get aiProofreading() {
     return Boolean(serverEnv.anthropicApiKey);
   },
+  /**
+   * "Continue with Google" is hidden until the provider is actually enabled in
+   * the Supabase dashboard. Offering a button that can only ever answer
+   * `provider is not enabled` is worse than not offering it.
+   *
+   * Set `GOOGLE_AUTH_ENABLED=true` once the OAuth client is configured.
+   */
+  get googleAuth() {
+    return process.env.GOOGLE_AUTH_ENABLED === "true";
+  },
   get googleDocsExport() {
     return Boolean(serverEnv.googleDocsClientId && serverEnv.googleDocsClientSecret);
   },

@@ -188,6 +188,26 @@
     min-height: 24rem;
   }
 
+  /*
+   * A suspected typo. Underlined rather than highlighted, so a page of them
+   * still reads as writing rather than as a marked-up exam paper. Clicking
+   * applies the correction; nothing happens on its own.
+   */
+  .spelling-suggestion {
+    cursor: pointer;
+    text-decoration-line: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--color-brand);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+    border-radius: 2px;
+    transition: background-color 120ms ease;
+  }
+
+  .spelling-suggestion:hover {
+    background-color: color-mix(in srgb, var(--color-brand) 14%, transparent);
+  }
+
   .tiptap p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);
     color: var(--color-ink-muted);

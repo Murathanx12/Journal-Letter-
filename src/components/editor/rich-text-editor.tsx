@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import type { RichTextDoc } from "@/lib/text/rich-text";
 
 import { EditorToolbar } from "./editor-toolbar";
+import { SpellingSuggestions } from "./spelling-suggestions";
 
 /**
  * The writing surface.
@@ -27,12 +28,15 @@ export function RichTextEditor({
   editable = true,
   onChange,
   onEditorReady,
+  onSuggestionApplied,
 }: {
   initialContent: RichTextDoc;
   placeholder?: string;
   editable?: boolean;
   onChange?: (doc: RichTextDoc) => void;
   onEditorReady?: (editor: Editor) => void;
+  /** Fired when a spelling highlight is clicked and the fix applied. */
+  onSuggestionApplied?: (remaining: number) => void;
 }) {
   const editor = useEditor({
     // Server-rendering a ProseMirror instance produces hydration mismatches.
@@ -54,6 +58,9 @@ export function RichTextEditor({
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Image.configure({ inline: false, allowBase64: false }),
       Placeholder.configure({ placeholder: placeholder ?? "Write…" }),
+      SpellingSuggestions.configure({
+        onApply: (remaining) => onSuggestionApplied?.(remaining),
+      }),
     ],
     content: initialContent,
     editorProps: {

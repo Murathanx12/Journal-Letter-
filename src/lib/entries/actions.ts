@@ -82,6 +82,23 @@ export async function saveEntry(input: unknown): Promise<ActionResult<SavedEntry
   }
 
   if (values.entryId) {
+    // Keep the "corrected" label truthful. If the text now matches the captured
+    // original exactly — because every suggestion was undone — then this really
+    // is the original again, whatever happened in between.
+    const { data: existing } = await supabase
+      .from("entries")
+      .select("original_plain_text")
+      .eq("id", values.entryId)
+      .eq("book_id", values.bookId)
+      .maybeSingle();
+
+    const correctionState =
+      existing?.original_plain_text == null
+        ? undefined
+        : existing.original_plain_text.trim() === plainText.trim()
+          ? ("original" as const)
+          : ("gentle" as const);
+
     const { data: updated, error } = await supabase
       .from("entries")
       .update({
@@ -90,6 +107,7 @@ export async function saveEntry(input: unknown): Promise<ActionResult<SavedEntry
         content: asJson(content),
         plain_text: plainText,
         layout: asJson(layout),
+        ...(correctionState ? { correction_state: correctionState } : {}),
         status: values.status,
         tags: values.tags,
         mood: values.mood,
@@ -155,6 +173,49 @@ export async function saveEntry(input: unknown): Promise<ActionResult<SavedEntry
 
   revalidatePath(`/books/${values.bookId}`, "layout");
   return ok({ entryId: created.id });
+}
+
+/**
+ * Record the author's words before machine suggestions touched them.
+ *
+ * Corrections are now applied as ordinary edits in the editor, so that
+ * "Export original writing" still has something true to return to, the
+ * pre-correction document is captured here — once, the first time a suggestion
+ * is accepted. It is never overwritten afterwards.
+ */
+export async function captureOriginal(
+  bookId: string,
+  entryId: string,
+  originalContent: unknown,
+): Promise<ActionResult> {
+  await requireUser();
+
+  const supabase = await createClient();
+
+  const { data: entry } = await supabase
+    .from("entries")
+    .select("original_content")
+    .eq("id", entryId)
+    .eq("book_id", bookId)
+    .maybeSingle();
+
+  // Already captured: the original is whatever it was the first time.
+  if (!entry || entry.original_content) return ok();
+
+  const doc = asRichTextDoc(originalContent);
+
+  const { error } = await supabase
+    .from("entries")
+    .update({
+      original_content: asJson(doc),
+      original_plain_text: toPlainText(doc),
+      corrected_at: new Date().toISOString(),
+    })
+    .eq("id", entryId)
+    .eq("book_id", bookId);
+
+  if (error) return fail(describeDatabaseError(error));
+  return ok();
 }
 
 export async function deleteEntry(input: unknown): Promise<ActionResult> {

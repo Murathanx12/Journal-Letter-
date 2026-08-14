@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { filterCorrections } from "@/lib/proofread/filter";
 import { isSpellingOnlyChange } from "@/lib/proofread/spelling-guard";
+import { toWordSuggestions } from "@/lib/proofread/suggestions";
 import { applyParagraphCorrections, toParagraphs } from "@/lib/text/apply-corrections";
 import { changeRatio, diffWords, hasRealChange, wordChangeStats } from "@/lib/text/diff";
 import { fromPlainText, toPlainText, type RichTextDoc } from "@/lib/text/rich-text";
@@ -303,6 +304,58 @@ describe("applyParagraphCorrections", () => {
     ]);
 
     expect(toPlainText(result)).toBe("First line\nSecond line");
+  });
+});
+
+describe("toWordSuggestions", () => {
+  it("narrows a corrected paragraph down to the word that changed", () => {
+    const suggestions = toWordSuggestions([
+      {
+        index: 0,
+        original: "I recieve your letters every morning",
+        corrected: "I receive your letters every morning",
+        notes: ["recieve -> receive"],
+      },
+    ]);
+
+    expect(suggestions).toHaveLength(1);
+    const [only] = suggestions;
+    expect(only!.before).toBe("recieve");
+    expect(only!.replacement).toBe("receive");
+    // The offsets must point at the word itself, not the surrounding spaces.
+    expect("I recieve your letters every morning".slice(only!.start, only!.end)).toBe("recieve");
+  });
+
+  it("reports each changed word separately", () => {
+    const suggestions = toWordSuggestions([
+      {
+        index: 0,
+        original: "teh cat sat on teh mat",
+        corrected: "the cat sat on the mat",
+        notes: [],
+      },
+    ]);
+
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions.every((s) => s.before === "teh" && s.replacement === "the")).toBe(true);
+    for (const suggestion of suggestions) {
+      expect("teh cat sat on teh mat".slice(suggestion.start, suggestion.end)).toBe("teh");
+    }
+  });
+
+  it("keeps the block index so the editor knows which paragraph to mark", () => {
+    const suggestions = toWordSuggestions([
+      { index: 3, original: "dont stop", corrected: "don't stop", notes: [] },
+    ]);
+
+    expect(suggestions[0]!.blockIndex).toBe(3);
+    expect("dont stop".slice(suggestions[0]!.start, suggestions[0]!.end)).toBe("dont");
+  });
+
+  it("produces nothing when a paragraph did not change", () => {
+    expect(
+      toWordSuggestions([{ index: 0, original: "same words", corrected: "same words", notes: [] }]),
+    ).toEqual([]);
   });
 });
 

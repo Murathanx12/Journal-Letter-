@@ -1,11 +1,11 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
-import { AlertTriangle, Check, CloudOff, Loader2, Lock, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, CloudOff, Loader2, Lock, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 
-import { ProofreadPanel } from "@/components/editor/proofread-panel";
+import { SpellingBar } from "@/components/editor/spelling-bar";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { PhotoArranger } from "@/components/media/photo-arranger";
 import { PhotoPanel } from "@/components/media/photo-panel";
@@ -20,8 +20,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, FormError, Input } from "@/components/ui/form";
 import { Card } from "@/components/ui/surface";
-import { applyCorrection, deleteEntry, saveEntry } from "@/lib/entries/actions";
-import type { ProofreadMode } from "@/lib/proofread/types";
+import { captureOriginal, deleteEntry, saveEntry } from "@/lib/entries/actions";
+import type { WordSuggestion } from "@/lib/proofread/suggestions";
 import { countWords, EMPTY_DOC, toPlainText, type RichTextDoc } from "@/lib/text/rich-text";
 import { formatLongDate, type CalendarDate } from "@/lib/date/calendar-date";
 import { cn } from "@/lib/utils/cn";
@@ -68,9 +68,17 @@ export function EntryComposer({
   const [sealed, setSealed] = useState(Boolean(entry?.sealedUntil));
   const [sealedUntil, setSealedUntil] = useState<string>(entry?.sealedUntil ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [showProofread, setShowProofread] = useState(false);
   const [recoveryDismissed, setRecoveryDismissed] = useState(false);
   const editorRef = useRef<Editor | null>(null);
+
+  const [suggestionCount, setSuggestionCount] = useState(0);
+  /**
+   * The document as it stood before any suggestion was accepted. Snapshotted
+   * when a check runs, so the entry's stored "original" is the author's own
+   * words rather than whatever was left after the first fix.
+   */
+  const preCorrectionDoc = useRef<RichTextDoc | null>(null);
+  const originalCaptured = useRef(false);
 
   const [tab, setTab] = useState<"write" | "photos">("write");
   const [layout, setLayout] = useState<PlacedMedia[]>(entry?.layout ?? []);
@@ -121,30 +129,41 @@ export function EntryComposer({
     editorRef.current = instance;
   }, []);
 
+  const handleSuggestions = useCallback(
+    (suggestions: WordSuggestion[]) => {
+      preCorrectionDoc.current = content;
+      editorRef.current?.commands.setSpellingSuggestions(suggestions);
+      setSuggestionCount(suggestions.length);
+    },
+    [content],
+  );
+
+  const handleClearSuggestions = useCallback(() => {
+    editorRef.current?.commands.clearSpellingSuggestions();
+    setSuggestionCount(0);
+  }, []);
+
   /**
-   * Accepting corrections.
+   * A highlight was clicked and the fix applied.
    *
-   * The entry is saved *before* the corrected text is written, so the row that
-   * captures `original_content` holds the author's own words. Proofreading a
-   * brand-new entry that had never been saved would otherwise record the
-   * corrected version as the original — exactly the thing this product promises
-   * never to do.
+   * The edit itself already happened in the editor — and is therefore in the
+   * undo history. All that is left is to remember the author's untouched words
+   * once, so "Restore my original" and "Export original writing" keep working.
    */
-  const handleApplyCorrections = useCallback(
-    async (corrected: RichTextDoc, mode: ProofreadMode) => {
-      const id = autosave.entryId ?? (await autosave.saveNow());
-
-      if (id) {
-        const result = await applyCorrection({ bookId, entryId: id, content: corrected, mode });
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
-      }
-
-      editorRef.current?.commands.setContent(corrected);
-      setContent(corrected);
+  const handleSuggestionApplied = useCallback(
+    (remaining: number) => {
+      setSuggestionCount(remaining);
       touch();
+
+      if (originalCaptured.current) return;
+      const original = preCorrectionDoc.current;
+      if (!original) return;
+      originalCaptured.current = true;
+
+      void (async () => {
+        const id = autosave.entryId ?? (await autosave.saveNow());
+        if (id) await captureOriginal(bookId, id, original);
+      })();
     },
     [autosave, bookId, touch],
   );
@@ -312,6 +331,7 @@ export function EntryComposer({
           placeholder="Good morning…"
           onChange={handleChange}
           onEditorReady={handleEditorReady}
+          onSuggestionApplied={handleSuggestionApplied}
         />
       </div>
 
@@ -402,28 +422,14 @@ export function EntryComposer({
         </div>
       </details>
 
-      {aiAvailable ? (
-        <div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowProofread((value) => !value)}
-            disabled={plainText.trim().length === 0}
-          >
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
-            {showProofread ? "Hide proofreading" : "Check spelling and punctuation"}
-          </Button>
-
-          {showProofread ? (
-            <ProofreadPanel
-              bookId={bookId}
-              doc={content}
-              onApply={handleApplyCorrections}
-              className="mt-4"
-            />
-          ) : null}
-        </div>
+      {aiAvailable && tab === "write" ? (
+        <SpellingBar
+          bookId={bookId}
+          doc={content}
+          remaining={suggestionCount}
+          onSuggestions={handleSuggestions}
+          onClear={handleClearSuggestions}
+        />
       ) : null}
 
       {error ? <FormError>{error}</FormError> : null}

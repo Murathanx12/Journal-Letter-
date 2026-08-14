@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { GoogleButton } from "@/components/auth/google-button";
 import { safeNextPath } from "@/lib/auth/redirect";
+import { featureFlags } from "@/lib/env";
 
 import { SignUpForm } from "./signup-form";
 
@@ -26,13 +27,17 @@ export default async function SignUpPage({
         <p className="text-sm text-ink-muted">A journal for yourself, or letters with someone.</p>
       </div>
 
-      <GoogleButton next={target} label="Continue with Google" />
+      {featureFlags.googleAuth ? (
+        <>
+          <GoogleButton next={target} label="Continue with Google" />
 
-      <div className="flex items-center gap-3" role="separator">
-        <span className="h-px flex-1 bg-rule" />
-        <span className="text-xs text-ink-muted">or</span>
-        <span className="h-px flex-1 bg-rule" />
-      </div>
+          <div className="flex items-center gap-3" role="separator">
+            <span className="h-px flex-1 bg-rule" />
+            <span className="text-xs text-ink-muted">or</span>
+            <span className="h-px flex-1 bg-rule" />
+          </div>
+        </>
+      ) : null}
 
       <SignUpForm next={target} />
 
