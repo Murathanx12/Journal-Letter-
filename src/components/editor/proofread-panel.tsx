@@ -102,7 +102,7 @@ export function ProofreadPanel({
             ) : (
               <Sparkles className="h-4 w-4" aria-hidden="true" />
             )}
-            Gentle
+            Spelling only
           </Button>
           <Button size="sm" variant="ghost" disabled={loading} onClick={() => void run("polish")}>
             {loading && mode === "polish" ? (
@@ -115,8 +115,8 @@ export function ProofreadPanel({
 
       <p className="text-xs text-ink-muted">
         {mode === "gentle"
-          ? "Gentle only fixes clear spelling, capitalisation and punctuation slips. Slang, pet names and repeated letters are left exactly as you wrote them."
-          : "Polish is a firmer edit: awkward sentences and tense slips too. It still keeps your words, your tone and your pet names."}
+          ? "Only misspellings, capitals and punctuation. A word can only be swapped for a near-identical spelling of itself, so words in another language, pet names and made-up spellings are left exactly as you wrote them. Anything it is not sure about, it leaves alone."
+          : "Polish is a firmer edit that may reword awkward sentences. Use it deliberately — it can change how something sounds. Your original is still kept."}
       </p>
 
       {error ? <FormError>{error}</FormError> : null}

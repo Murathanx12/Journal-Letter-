@@ -1,5 +1,6 @@
 import { hasRealChange, wordChangeStats } from "@/lib/text/diff";
 
+import { isSpellingOnlyChange } from "./spelling-guard";
 import type { ParagraphCorrection, ProofreadMode } from "./types";
 
 /**
@@ -15,25 +16,36 @@ import type { ParagraphCorrection, ProofreadMode } from "./types";
  */
 
 /**
- * The gentle-mode limits.
+ * Polish mode's limit.
  *
- * Both are measured against *words*, with case and punctuation normalised
- * away — capitalising a sentence and adding a full stop changes many characters
- * but no vocabulary, and is exactly the kind of fix gentle mode exists for.
- *
- * Two thresholds rather than one, because a ratio alone misjudges short
- * paragraphs: correcting "teh cat" to "the cat" is a 50% change by ratio and
- * obviously a typo fix. So a suggestion is only rejected when it rewrites more
- * than a couple of words *and* a large share of them.
+ * Polish is the explicitly-requested, firmer edit, so it is allowed to change
+ * wording — but not to replace a paragraph wholesale. Measured against *words*,
+ * with case and punctuation normalised away, and with a small absolute
+ * allowance so short paragraphs are not misjudged by a ratio alone.
  */
-export const GENTLE_CHANGE_LIMIT = 0.25;
-export const GENTLE_WORD_ALLOWANCE = 2;
+export const POLISH_CHANGE_LIMIT = 0.5;
+export const POLISH_WORD_ALLOWANCE = 4;
 
-/** Is this a genuine correction, or a rewrite wearing a correction's clothes? */
-export function isGentleEnough(original: string, corrected: string): boolean {
+function isPolishEnough(original: string, corrected: string): boolean {
   const { changed, ratio } = wordChangeStats(original, corrected);
-  if (changed <= GENTLE_WORD_ALLOWANCE) return true;
-  return ratio <= GENTLE_CHANGE_LIMIT;
+  if (changed <= POLISH_WORD_ALLOWANCE) return true;
+  return ratio <= POLISH_CHANGE_LIMIT;
+}
+
+/**
+ * Is this a genuine correction, or a rewrite wearing a correction's clothes?
+ *
+ * In `gentle` — presented as "Spelling only" — every individual change must be
+ * provably typographical. See `spelling-guard.ts`.
+ */
+export function isAcceptableChange(
+  original: string,
+  corrected: string,
+  mode: ProofreadMode,
+): boolean {
+  return mode === "gentle"
+    ? isSpellingOnlyChange(original, corrected)
+    : isPolishEnough(original, corrected);
 }
 
 export type RawCorrection = {
@@ -66,7 +78,7 @@ export function filterCorrections(
     // Never let a paragraph be deleted under the guise of correcting it.
     if (corrected.trim().length === 0) continue;
 
-    if (mode === "gentle" && !isGentleEnough(original, corrected)) continue;
+    if (!isAcceptableChange(original, corrected, mode)) continue;
 
     const notes = Array.isArray(candidate.notes)
       ? candidate.notes.filter((note): note is string => typeof note === "string").slice(0, 6)

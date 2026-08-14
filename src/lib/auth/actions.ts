@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { sanitizeEmail, sanitizePassword } from "@/lib/auth/credentials";
 import { safeNextPath } from "@/lib/auth/redirect";
 import { serverEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -22,9 +23,24 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 const credentials = z.object({
-  email: z.email({ message: "Enter a valid email address." }).toLowerCase(),
+  email: z.email({ message: "Enter a valid email address." }),
   password: z.string().min(8, "Use at least 8 characters."),
 });
+
+/**
+ * Read credentials from a form, with invisible characters removed.
+ *
+ * A password copied out of a password manager or a document can carry a
+ * byte-order mark or a zero-width space. Left alone, those either break the
+ * request outright or silently create a password the person can never type
+ * again.
+ */
+function readCredentials(formData: FormData) {
+  return {
+    email: sanitizeEmail(String(formData.get("email") ?? "")),
+    password: sanitizePassword(String(formData.get("password") ?? "")),
+  };
+}
 
 const signUpSchema = credentials.extend({
   displayName: z.string().trim().min(1, "Tell us what to call you.").max(80),
@@ -39,20 +55,23 @@ export async function signInWithPassword(
   _previous: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  const parsed = credentials.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
+  const parsed = credentials.safeParse(readCredentials(formData));
 
   if (!parsed.success) return fail("Check your email address and password.");
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
-  if (error) {
-    // Deliberately vague — never distinguish "no such account" from "wrong
-    // password".
-    return fail("That email and password do not match.");
+  try {
+    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+
+    if (error) {
+      // Deliberately vague — never distinguish "no such account" from "wrong
+      // password".
+      return fail("That email and password do not match.");
+    }
+  } catch {
+    // The network layer itself refused the request.
+    return fail("Could not reach the sign-in service. Please try again.");
   }
 
   redirect(safeNextPath(formData.get("next") as string | null));
@@ -63,9 +82,8 @@ export async function signUpWithPassword(
   formData: FormData,
 ): Promise<ActionResult<{ needsVerification: boolean }>> {
   const parsed = signUpSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-    displayName: formData.get("displayName"),
+    ...readCredentials(formData),
+    displayName: String(formData.get("displayName") ?? ""),
   });
 
   if (!parsed.success) {
@@ -76,40 +94,61 @@ export async function signUpWithPassword(
   const next = safeNextPath(formData.get("next") as string | null);
   const supabase = await createClient();
 
-  const { data, error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: {
-      // Picked up by the `handle_new_user` trigger to seed the profile.
-      data: { display_name: parsed.data.displayName },
-      emailRedirectTo: `${serverEnv.siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
-    },
-  });
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      options: {
+        // Picked up by the `handle_new_user` trigger to seed the profile.
+        data: { display_name: parsed.data.displayName },
+        emailRedirectTo: `${serverEnv.siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
+    });
 
-  if (error) return fail(error.message);
+    if (error) return fail(error.message);
 
-  // With email confirmation on, Supabase returns a user but no session.
-  const needsVerification = !data.session;
-  return ok({ needsVerification });
+    // With email confirmation on, Supabase returns a user but no session.
+    return ok({ needsVerification: !data.session });
+  } catch {
+    return fail("Could not reach the sign-up service. Please try again.");
+  }
 }
 
 export async function signInWithGoogle(next: string): Promise<ActionResult> {
   const supabase = await createClient();
   const target = safeNextPath(next);
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${serverEnv.siteUrl}/auth/callback?next=${encodeURIComponent(target)}`,
-      // Only identity. The Docs/Drive scopes are requested separately, and only
-      // when somebody actually chooses "Export to Google Docs".
-      scopes: "email profile",
-    },
-  });
+  let url: string;
 
-  if (error || !data.url) return fail("Could not reach Google. Please try again.");
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${serverEnv.siteUrl}/auth/callback?next=${encodeURIComponent(target)}`,
+        // Only identity. The Docs/Drive scopes are requested separately, and
+        // only when somebody actually chooses "Export to Google Docs".
+        scopes: "email profile",
+      },
+    });
 
-  redirect(data.url);
+    if (error) {
+      // Supabase answers `provider is not enabled` until Google is configured
+      // in the dashboard. Say that plainly rather than showing raw API JSON.
+      if (/not enabled|unsupported provider/i.test(error.message)) {
+        return fail(
+          "Google sign-in has not been set up for this site yet. Use an email address and password for now.",
+        );
+      }
+      return fail("Could not reach Google. Please try again.");
+    }
+
+    if (!data.url) return fail("Could not reach Google. Please try again.");
+    url = data.url;
+  } catch {
+    return fail("Could not reach Google. Please try again.");
+  }
+
+  redirect(url);
 }
 
 export async function requestPasswordReset(
@@ -135,7 +174,7 @@ export async function updatePassword(
   const password = z
     .string()
     .min(8, "Use at least 8 characters.")
-    .safeParse(formData.get("password"));
+    .safeParse(sanitizePassword(String(formData.get("password") ?? "")));
 
   if (!password.success) return fail("Use at least 8 characters.");
 

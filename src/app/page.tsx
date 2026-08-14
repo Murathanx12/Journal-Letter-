@@ -90,29 +90,54 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* A small taste of the reading view, so the promise is visible rather than described. */}
+        {/*
+          A diagram of how a compiled day is laid out — a date, then each writer
+          in the order they wrote.
+
+          Deliberately abstract: this page is public, so it shows the *shape* of
+          a book rather than anything resembling somebody's letters. The lines
+          are decorative rules, not redacted text, and the names are labels.
+        */}
         <section className="mx-auto max-w-3xl px-6 pb-24">
-          <div className="rounded-card border border-rule bg-surface p-8 shadow-sm sm:p-12">
+          <figure className="rounded-card border border-rule bg-surface p-8 shadow-sm sm:p-12">
+            <figcaption className="sr-only">
+              How a single day appears in a compiled book: a date heading, then each
+              contributor&rsquo;s entry in the order it was written.
+            </figcaption>
+
             <p className="text-center font-serif text-sm tracking-[0.25em] text-ink-muted uppercase">
-              14 August 2026
+              A day in the book
             </p>
-            <div className="mx-auto mt-8 max-w-md space-y-8">
-              <article>
-                <p className="font-serif text-xs tracking-wide text-ink-muted">Murathan</p>
-                <p className="mt-2 font-serif text-[17px] leading-[1.8] text-ink">
-                  Good morning askim. It rained here all night and I kept thinking about the
-                  ferry, and how you laughed when the wind took your hat…
-                </p>
-              </article>
-              <article>
-                <p className="font-serif text-xs tracking-wide text-ink-muted">Rosie</p>
-                <p className="mt-2 font-serif text-[17px] leading-[1.8] text-ink">
-                  I woke up before my alarm again. I have started writing these before I check
-                  anything else, because it is the only part of the day that is only ours…
-                </p>
-              </article>
+
+            <div className="mx-auto mt-8 max-w-md space-y-8" aria-hidden="true">
+              {[
+                { label: "First writer", widths: [96, 88, 72] },
+                { label: "Second writer", widths: [92, 80, 60] },
+              ].map((writer) => (
+                <div key={writer.label}>
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="inline-block h-px w-6 bg-brand/60" />
+                    <span className="font-serif text-xs tracking-wide text-ink-muted">
+                      {writer.label}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2.5">
+                    {writer.widths.map((width, index) => (
+                      <span
+                        key={index}
+                        className="block h-[3px] rounded-full bg-ink/10"
+                        style={{ width: `${width}%` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+
+            <p className="mt-10 text-center text-sm text-ink-muted">
+              Everything you write stays private to you and the people you invite.
+            </p>
+          </figure>
         </section>
 
         <section className="border-t border-rule bg-surface-sunk/40">

@@ -31,16 +31,36 @@ If a paragraph has nothing genuinely wrong with it, return it completely unchang
 
 const GENTLE = `${SHARED}
 
-MODE: GENTLE.
+MODE: SPELLING ONLY. This is the strictest mode and the default.
 
-Only fix things that are unambiguously errors:
-- misspelled ordinary words ("recieve" -> "receive", "definately" -> "definitely")
+You may ONLY fix:
+- a misspelled word, replaced by the correctly spelled version of THAT SAME word
+  ("recieve" -> "receive", "definately" -> "definitely", "teh" -> "the")
 - accidental capitalisation ("i" as the pronoun -> "I"; a stray CAPS letter mid-word)
-- missing or doubled punctuation, missing apostrophes ("dont" -> "don't")
-- obvious typing slips ("teh" -> "the", doubled words like "the the")
-- clear grammatical slips such as an obviously wrong verb form
+- missing or doubled punctuation, and missing apostrophes ("dont" -> "don't")
+- an accidentally doubled word ("the the" -> "the")
+- a word accidentally split or joined ("goodmorning" -> "good morning")
 
-That is the entire list. If a change is not on it, do not make it.`;
+That is the complete list. You may not do anything else. In particular you may
+NOT swap a word for a different word, add a word, remove a word, reorder
+anything, or change grammar.
+
+THE LANGUAGE RULE — THIS MATTERS MOST:
+
+This writing mixes languages and switches between them mid-sentence. It contains
+Turkish, English and words that belong to no dictionary at all: pet names,
+private jokes, invented spellings.
+
+If you are not completely certain that a word is a misspelling of a specific
+word in a language you are confident about, LEAVE IT EXACTLY AS IT IS.
+
+Do not "correct" a word merely because you do not recognise it. An unfamiliar
+word is far more likely to be another language, a name, or a term of endearment
+than a mistake. When in doubt — and you should usually be in doubt — change
+nothing.
+
+Returning a paragraph unchanged is the correct answer the overwhelming majority
+of the time. There is no reward for finding something to fix.`;
 
 const POLISH = `${SHARED}
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { filterCorrections, isGentleEnough } from "@/lib/proofread/filter";
+import { filterCorrections } from "@/lib/proofread/filter";
+import { isSpellingOnlyChange } from "@/lib/proofread/spelling-guard";
 import { applyParagraphCorrections, toParagraphs } from "@/lib/text/apply-corrections";
 import { changeRatio, diffWords, hasRealChange, wordChangeStats } from "@/lib/text/diff";
 import { fromPlainText, toPlainText, type RichTextDoc } from "@/lib/text/rich-text";
@@ -107,43 +108,96 @@ describe("filterCorrections in gentle mode", () => {
   });
 });
 
-describe("isGentleEnough", () => {
-  it("allows a spelling fix", () => {
+describe("isSpellingOnlyChange", () => {
+  it("allows a misspelling replaced by the same word spelled correctly", () => {
     expect(
-      isGentleEnough(
+      isSpellingOnlyChange(
         "I recieve your letters every morning",
         "I receive your letters every morning",
       ),
     ).toBe(true);
   });
 
-  it("allows a short paragraph with a single typo, despite the high ratio", () => {
-    // Two changed words out of four is 50% by ratio, and obviously a typo fix.
-    expect(isGentleEnough("teh cat", "the cat")).toBe(true);
+  it("allows a transposition, the commonest typo of all", () => {
+    expect(isSpellingOnlyChange("teh cat", "the cat")).toBe(true);
   });
 
   it("allows pure capitalisation and punctuation, however much text it touches", () => {
     expect(
-      isGentleEnough(
+      isSpellingOnlyChange(
         "good morning askim i missed you sooo much",
         "Good morning askim, I missed you sooo much.",
       ),
     ).toBe(true);
   });
 
-  it("refuses a rewrite that swaps the writer's actual words", () => {
-    expect(isGentleEnough("I love you sooo much askim", "I love you very much, my darling.")).toBe(
+  it("allows a missing apostrophe", () => {
+    expect(isSpellingOnlyChange("i dont know", "I don't know")).toBe(true);
+  });
+
+  it("allows an accidentally doubled word to be removed", () => {
+    expect(isSpellingOnlyChange("I miss the the ferry", "I miss the ferry")).toBe(true);
+  });
+
+  it("allows a word that was accidentally joined to be split", () => {
+    expect(isSpellingOnlyChange("goodmorning askim", "good morning askim")).toBe(true);
+  });
+
+  it("refuses swapping a word for a different word", () => {
+    expect(isSpellingOnlyChange("I love you sooo much askim", "I love you very much askim")).toBe(
       false,
     );
   });
 
+  it("refuses replacing a term of endearment", () => {
+    expect(
+      isSpellingOnlyChange("I love you sooo much askim", "I love you very much, my darling."),
+    ).toBe(false);
+  });
+
+  it("refuses inserting a word that was never written", () => {
+    expect(isSpellingOnlyChange("I went to shop", "I went to the shop")).toBe(false);
+  });
+
+  it("refuses deleting a word that was not a duplicate", () => {
+    expect(isSpellingOnlyChange("I really do miss you", "I do miss you")).toBe(false);
+  });
+
+  it("refuses reordering", () => {
+    expect(isSpellingOnlyChange("the grey ferry", "the ferry grey")).toBe(false);
+  });
+
   it("refuses wholesale replacement of a long paragraph", () => {
     expect(
-      isGentleEnough(
+      isSpellingOnlyChange(
         "we walked along the harbour and it rained the whole way home",
         "The two of us strolled beside the waterfront while precipitation continued throughout our return journey",
       ),
     ).toBe(false);
+  });
+
+  it("leaves words in another language alone, because a translation is never a near-neighbour", () => {
+    // The multilingual promise. A model that "helpfully" translates or swaps a
+    // word it did not recognise is rejected on the shape of the change alone,
+    // with no dictionary involved.
+    expect(isSpellingOnlyChange("seni cok seviyorum", "I love you very much")).toBe(false);
+    expect(isSpellingOnlyChange("gunaydin askim", "good morning darling")).toBe(false);
+    expect(isSpellingOnlyChange("hayatim benim", "my life")).toBe(false);
+  });
+
+  it("still allows a genuine typo inside non-English text", () => {
+    // One transposed letter in a Turkish word is still just a typo.
+    expect(isSpellingOnlyChange("gunaydni askim", "gunaydin askim")).toBe(true);
+  });
+
+  it("refuses swapping one short foreign word for another", () => {
+    // Short words must not drift: two edits are only credible in a long word.
+    expect(isSpellingOnlyChange("canim benim", "canim seni")).toBe(false);
+  });
+
+  it("keeps accented characters intact", () => {
+    expect(isSpellingOnlyChange("günaydın aşkım", "günaydın aşkım.")).toBe(true);
+    expect(isSpellingOnlyChange("günaydın aşkım", "good morning")).toBe(false);
   });
 });
 

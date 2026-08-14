@@ -1,9 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { signInWithGoogle } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
+import { FormError } from "@/components/ui/form";
 
 /**
  * The Google mark, inline. An external image would be a third-party request on
@@ -34,17 +35,31 @@ function GoogleMark() {
 
 export function GoogleButton({ next, label }: { next: string; label: string }) {
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      className="w-full"
-      disabled={pending}
-      onClick={() => startTransition(() => void signInWithGoogle(next))}
-    >
-      <GoogleMark />
-      {pending ? "Taking you to Google…" : label}
-    </Button>
+    <div className="space-y-3">
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            setError(null);
+            // On success this redirects and never returns. A returned result
+            // therefore always means something went wrong — most commonly that
+            // the Google provider has not been enabled in Supabase yet.
+            const result = await signInWithGoogle(next);
+            if (result && !result.ok) setError(result.error);
+          })
+        }
+      >
+        <GoogleMark />
+        {pending ? "Taking you to Google…" : label}
+      </Button>
+
+      {error ? <FormError>{error}</FormError> : null}
+    </div>
   );
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  hadInvisibleCharacters,
+  sanitizeEmail,
+  sanitizePassword,
+} from "@/lib/auth/credentials";
 import { safeNextPath } from "@/lib/auth/redirect";
 import { generateInvitationToken, hashInvitationToken, invitationUrl } from "@/lib/invitations/tokens";
 import { parseCover, parseDesign } from "@/lib/design/theme";
@@ -33,6 +38,57 @@ describe("safeNextPath", () => {
     expect(safeNextPath(undefined)).toBe("/library");
     expect(safeNextPath("")).toBe("/library");
     expect(safeNextPath("library")).toBe("/library");
+  });
+});
+
+describe("credential sanitising", () => {
+  it("removes the byte-order mark that breaks the request outright", () => {
+    // U+FEFF is character 65279 — the one that produces
+    // "Cannot convert argument to a ByteString".
+    const pasted = `Str0ng!﻿Passw0rd`;
+
+    expect(hadInvisibleCharacters(pasted)).toBe(true);
+    expect(sanitizePassword(pasted)).toBe("Str0ng!Passw0rd");
+    // No character above 255 survives, so the value is header-safe.
+    expect([...sanitizePassword(pasted)].every((c) => c.charCodeAt(0) < 256)).toBe(true);
+  });
+
+  it("removes zero-width and bidi characters", () => {
+    expect(sanitizePassword("ab​cd‎ ef")).toBe("abcd ef");
+    expect(sanitizePassword("a­b")).toBe("ab");
+    expect(sanitizePassword("a⁠b")).toBe("ab");
+  });
+
+  it("strips control characters, including a stray newline from a paste", () => {
+    expect(sanitizePassword("secret\r\npassword")).toBe("secretpassword");
+    expect(sanitizePassword("tab\there")).toBe("tabhere");
+  });
+
+  it("leaves a legitimate password completely alone", () => {
+    const strong = "correct horse battery staple!42";
+    expect(sanitizePassword(strong)).toBe(strong);
+    expect(hadInvisibleCharacters(strong)).toBe(false);
+  });
+
+  it("keeps accented letters, non-Latin scripts and emoji", () => {
+    // Stripping these would silently change somebody's password.
+    expect(sanitizePassword("şifreÇok1")).toBe("şifreÇok1");
+    expect(sanitizePassword("пароль99")).toBe("пароль99");
+    expect(sanitizePassword("love💌you1")).toBe("love💌you1");
+  });
+
+  it("keeps spaces inside a passphrase", () => {
+    expect(sanitizePassword("a long pass phrase")).toBe("a long pass phrase");
+  });
+
+  it("normalises an email without touching the local part's meaning", () => {
+    expect(sanitizeEmail("  Someone@Example.COM \n")).toBe("someone@example.com");
+    expect(sanitizeEmail("a﻿b@example.com")).toBe("ab@example.com");
+  });
+
+  it("is idempotent, so a password set once always matches later", () => {
+    const once = sanitizePassword("pass﻿word");
+    expect(sanitizePassword(once)).toBe(once);
   });
 });
 
