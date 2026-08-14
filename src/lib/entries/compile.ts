@@ -1,4 +1,5 @@
 import type { CalendarDate } from "@/lib/date/calendar-date";
+import type { PlacedMedia } from "@/lib/media/placement";
 
 /**
  * Compiling loose entries into a book.
@@ -28,6 +29,8 @@ export type CompiledEntry = {
   /** The rich-text document to render. */
   content: unknown;
   plainText: string;
+  /** Photographs placed on the page. Empty for a plain entry. */
+  layout: PlacedMedia[];
   correctionState: "original" | "gentle" | "polish";
   hasOriginal: boolean;
   tags: string[];

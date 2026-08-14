@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 
 import { GoogleButton } from "@/components/auth/google-button";
@@ -22,7 +22,7 @@ export default async function LoginPage({
   return (
     <div className="space-y-6">
       <div className="space-y-1.5 text-center">
-        <h1 className="font-serif text-2xl text-ink">Welcome back</h1>
+        <h1 className="font-serif text-4xl tracking-[-0.015em] text-ink">Welcome back</h1>
         <p className="text-sm text-ink-muted">Your letters are where you left them.</p>
       </div>
 

@@ -3,9 +3,11 @@ import Link from "next/link";
 
 import { AuthorMark } from "@/components/book/author-mark";
 import { EntryContent } from "@/components/book/entry-content";
+import { MediaLayer, WrappedMedia } from "@/components/media/media-layer";
 import type { BookMember } from "@/lib/books/queries";
 import type { CompiledEntry } from "@/lib/entries/compile";
 import type { ResolvedDesign } from "@/lib/design/theme";
+import { splitByLayer } from "@/lib/media/placement";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -22,6 +24,7 @@ export function EntryBlock({
   canEdit,
   isFavorite,
   showActions = true,
+  mediaUrls,
   className,
 }: {
   entry: CompiledEntry;
@@ -31,8 +34,14 @@ export function EntryBlock({
   canEdit: boolean;
   isFavorite?: boolean;
   showActions?: boolean;
+  /** Signed URLs keyed by storage path. Absent means "no photographs". */
+  mediaUrls?: Map<string, string>;
   className?: string;
 }) {
+  const urls = mediaUrls ?? new Map<string, string>();
+  const { behind, front, wrapped } = splitByLayer(entry.layout);
+  const hasMedia = entry.layout.length > 0;
+
   return (
     <article className={cn("group", className)} id={`entry-${entry.id}`}>
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -76,18 +85,41 @@ export function EntryBlock({
         </h3>
       ) : null}
 
-      <div
-        className="book-prose"
-        data-indent={design.preset.indentParagraphs ? "true" : "false"}
-        // Each writer's own typeface, when the book asks for it. Size and
-        // leading stay the book's, so the page still looks like one book.
-        style={
-          design.perAuthorFonts && author
-            ? { fontFamily: `var(--author-font-${author.userId}, var(--book-body-font))` }
-            : undefined
-        }
-      >
-        <EntryContent content={entry.content} />
+      {/*
+        The page.
+
+        `container-type: inline-size` is what lets every placed photograph be
+        positioned in fractions of the column width — including vertically.
+        Without it a page arranged today would rearrange itself as soon as
+        somebody wrote another sentence.
+      */}
+      <div className={cn(hasMedia && "relative [container-type:inline-size]")}>
+        {hasMedia ? <MediaLayer items={behind} urls={urls} className="z-0" /> : null}
+
+        <div
+          className={cn("book-prose", hasMedia && "relative z-10")}
+          data-indent={design.preset.indentParagraphs ? "true" : "false"}
+          // Each writer's own typeface, when the book asks for it. Size and
+          // leading stay the book's, so the page still looks like one book.
+          style={
+            design.perAuthorFonts && author
+              ? { fontFamily: `var(--author-font-${author.userId}, var(--book-body-font))` }
+              : undefined
+          }
+        >
+          {/*
+            Floats come first so the text that follows flows around them. Their
+            `shape-outside` matches the cut-out, so the writing hugs the
+            silhouette rather than a box.
+          */}
+          {wrapped.map((item) => (
+            <WrappedMedia key={item.id} item={item} url={urls.get(item.path)} />
+          ))}
+
+          <EntryContent content={entry.content} />
+        </div>
+
+        {hasMedia ? <MediaLayer items={front} urls={urls} className="z-20" /> : null}
       </div>
 
       {entry.correctionState !== "original" ? (

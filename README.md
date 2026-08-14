@@ -65,9 +65,19 @@ automatically, whether or not they typed them.
 markers and an optional two-page spread; a calendar showing which days have
 writing; and full-text search across everything you are allowed to read.
 
+**Photographs on the page.** Pictures are not attachments in a list — they are
+placed on the page. Drag one anywhere, resize and rotate it, cut it into a
+shape (circle, arch, heart, hexagon, star, torn-edge cut-out), and choose
+whether it sits **behind** the writing, **in front** of it, or **in** it with
+the text flowing around the cut-out silhouette. Everything works by touch, so a
+page can be arranged on a phone. Positions are stored as fractions of the column
+width, so a layout made on a phone looks the same on a laptop.
+
 **Preservation.** Optional proofreading fixes obvious mistakes without touching
 slang, pet names, mixed languages or repeated letters — and never replaces the
-original, which stays recoverable and separately exportable forever.
+original, which stays recoverable and separately exportable forever. Its default
+mode is *spelling only*, and it is enforced mechanically rather than merely
+requested: see [AI proofreading](#ai-proofreading-setup).
 
 **Export.** A typeset PDF, a real `.docx`, or a Google Doc, for the whole book or
 any date range, printed from either the original writing or the corrected text.
@@ -390,17 +400,39 @@ journal, and no telemetry contains journal contents.
 writing one more class.
 
 **The guard rails matter more than the prompt.** The prompt asks the model to
-preserve slang, pet names, mixed languages and repeated letters. `filter.ts`
-assumes it sometimes will not, and measures every suggestion by how much
-*vocabulary* it changes, with case and punctuation normalised away. So
-capitalising a sentence and adding a full stop is always allowed, while
+preserve slang, pet names, mixed languages and repeated letters.
+`spelling-guard.ts` assumes it sometimes will not.
+
+In the default **spelling only** mode, every individual change must be provably
+typographical before a human is even shown it:
+
+| Allowed | Rejected |
+| --- | --- |
+| the same word respelled within one or two edits (`recieve` → `receive`, `teh` → `the`) | a word swapped for a *different* word |
+| case or surrounding punctuation (`i` → `I`, `askim` → `askim,`) | a word inserted that was never written |
+| a doubled word removed (`the the` → `the`) | a word removed that was not a duplicate |
+| a word split or joined (`goodmorning` → `good morning`) | anything reordered |
+
+One disallowed change rejects the whole paragraph. So
 
 ```
 "I love you sooo much askim"  →  "I love you very much, my darling."
 ```
 
-is discarded before a human ever sees it in gentle mode. That behaviour is
-pinned by tests in `tests/preservation.test.ts`.
+never reaches the review screen.
+
+**This is also how the multilingual promise is kept.** The rule is about the
+*shape* of the change, not a dictionary. A word the model does not recognise
+cannot be translated or substituted, because the replacement would never be a
+near-neighbour of the original — `seni cok seviyorum` cannot become `I love you`.
+Turkish, invented spellings and pet names survive untouched, while a genuine
+typo inside them (`gunaydni` → `gunaydin`) is still fixable. Distance is
+Damerau–Levenshtein over code points, so a transposition costs one edit and
+accented or non-Latin characters count as one character each.
+
+**Polish** is the separate, explicitly-chosen mode that may reword. It is bounded
+too, but far more loosely. All of this is pinned by tests in
+`tests/preservation.test.ts`.
 
 ---
 
@@ -559,13 +591,16 @@ nothing about whether that book exists.
 
 ## Known limitations
 
-- **Images are not embedded in exports.** Attachments upload, store privately and
-  display in the app, but the PDF and DOCX render text only. Embedding them
-  requires fetching every signed URL during export; the document model already
-  carries the structure for it.
-- **Attachment upload UI is minimal.** The schema, storage bucket, policies and
-  authorization are complete; the editor exposes image insertion by URL rather
-  than a full uploader.
+- **Images are not embedded in exports.** Photographs upload, store privately,
+  and are placed and rendered on the page in the app, but the PDF and DOCX
+  render text only. Embedding them requires fetching every signed URL during
+  export; the document model already carries the structure for it.
+- **No freehand drawing.** Pictures can be placed, masked, rotated and layered,
+  but there is no pen tool for drawing on a page.
+- **Text follows a photograph's outline, not a curve.** `shape-outside` makes
+  the writing flow around a cut-out silhouette, and a placed picture can be set
+  at any angle — but text itself cannot yet be set along a curved path, which
+  needs SVG `textPath` and a different editor model.
 - **Bulk WhatsApp import is server-side only.** `bulkImportEntries` accepts a
   reviewed list of dated entries, and "Add Past Entry" is fully built, but the
   screen that parses a raw WhatsApp export and lets you correct the detected
@@ -588,8 +623,8 @@ nothing about whether that book exists.
 **Next**
 
 - Bulk WhatsApp export parser with a review screen before import
-- Images embedded in PDF and DOCX exports
-- A proper attachment uploader in the editor
+- Photographs embedded in PDF and DOCX exports
+- Freehand drawing on a page, and text set along a curve
 - Supabase Realtime, so a shared book updates when the other person posts
 
 **Later**

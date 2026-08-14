@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth/session";
-import { calendarDate, richTextDoc } from "@/lib/validation/schemas";
+import { parseLayout } from "@/lib/media/placement";
+import { calendarDate, layoutSchema, richTextDoc } from "@/lib/validation/schemas";
 import { asRichTextDoc, toPlainText } from "@/lib/text/rich-text";
 import { asJson } from "@/lib/supabase/json";
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +30,7 @@ const bodySchema = z.object({
   entryDate: calendarDate,
   title: z.string().trim().max(160).nullable(),
   content: richTextDoc,
+  layout: layoutSchema,
 });
 
 export async function POST(request: NextRequest) {
@@ -52,6 +54,7 @@ export async function POST(request: NextRequest) {
   const { bookId, entryId, entryDate, title, content } = parsed.data;
   const supabase = await createClient();
   const plainText = toPlainText(asRichTextDoc(content));
+  const layout = parseLayout(parsed.data.layout);
 
   if (entryId) {
     const { data, error } = await supabase
@@ -61,6 +64,7 @@ export async function POST(request: NextRequest) {
         title,
         content: asJson(content),
         plain_text: plainText,
+        layout: asJson(layout),
       })
       .eq("id", entryId)
       .eq("book_id", bookId)
@@ -80,8 +84,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ entryId: data.id, savedAt: data.updated_at });
   }
 
-  // Nothing typed yet — do not litter the book with empty drafts.
-  if (plainText.trim().length === 0 && !title) {
+  // Nothing typed yet — do not litter the book with empty drafts. A page that
+  // is only photographs so far still counts as something worth keeping.
+  if (plainText.trim().length === 0 && !title && layout.length === 0) {
     return NextResponse.json({ entryId: null, savedAt: null });
   }
 
@@ -94,6 +99,7 @@ export async function POST(request: NextRequest) {
       title,
       content: asJson(content),
       plain_text: plainText,
+      layout: asJson(layout),
       status: "draft",
     })
     .select("id, updated_at")

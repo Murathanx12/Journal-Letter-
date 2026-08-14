@@ -18,7 +18,12 @@ import {
   type CalendarDate,
 } from "@/lib/date/calendar-date";
 import { getAccent } from "@/lib/design/theme";
-import { getCalendar, getEntriesForDate, getFavorites } from "@/lib/entries/queries";
+import {
+  getCalendar,
+  getEntriesForDate,
+  getFavorites,
+  signEntryMedia,
+} from "@/lib/entries/queries";
 import { cn } from "@/lib/utils/cn";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -56,6 +61,7 @@ export default async function CalendarPage({
 
   const byDate = new Map(days.map((day) => [day.date, day]));
   const memberMap = new Map(members.map((member) => [member.userId, member]));
+  const mediaUrls = await signEntryMedia(dayEntries);
 
   const leadingBlanks = weekdayIndexMondayFirst(from);
   const total = daysInMonth(from);
@@ -195,6 +201,7 @@ export default async function CalendarPage({
                     bookId={bookId}
                     canEdit={entry.authorId === user?.id}
                     isFavorite={favorites.has(entry.id)}
+                    mediaUrls={mediaUrls}
                   />
                 ))}
               </div>

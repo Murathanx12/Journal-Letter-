@@ -27,6 +27,7 @@ export default async function WritePage({
         bookToday={startDate}
         entry={null}
         aiAvailable={featureFlags.aiProofreading}
+        indentParagraphs={book.resolvedDesign.preset.indentParagraphs}
       />
     </div>
   );

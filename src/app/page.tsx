@@ -43,8 +43,8 @@ export default async function LandingPage() {
   return (
     <div className="min-h-dvh bg-paper">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
-        <span className="font-serif text-lg tracking-tight text-ink">
-          Journal <span className="text-ink-muted">&amp;</span> Letter
+        <span className="font-serif text-2xl tracking-[-0.01em] text-ink">
+          Journal <span className="text-brand">&amp;</span> Letter
         </span>
         <nav className="flex items-center gap-2">
           <ThemeToggle />
@@ -66,11 +66,11 @@ export default async function LandingPage() {
       </header>
 
       <main>
-        <section className="mx-auto max-w-3xl px-6 pt-16 pb-20 text-center sm:pt-24">
-          <p className="text-sm tracking-[0.2em] text-ink-muted uppercase">
+        <section className="mx-auto max-w-3xl px-6 pt-14 pb-20 text-center sm:pt-20">
+          <p className="text-[11px] font-medium tracking-[0.22em] text-ink-muted uppercase">
             Letters · Journals · Books
           </p>
-          <h1 className="mt-6 font-serif text-4xl leading-[1.15] text-balance text-ink sm:text-5xl">
+          <h1 className="mt-6 font-serif text-5xl leading-[1.05] tracking-[-0.02em] text-balance text-ink sm:text-6xl">
             The letters you write every day, quietly becoming a book.
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-pretty text-ink-soft">
@@ -105,7 +105,9 @@ export default async function LandingPage() {
               contributor&rsquo;s entry in the order it was written.
             </figcaption>
 
-            <p className="text-center font-serif text-sm tracking-[0.25em] text-ink-muted uppercase">
+            {/* Small caps belong to the UI sans; a display serif at this size
+                just looks thin. */}
+            <p className="text-center text-[11px] font-medium tracking-[0.22em] text-ink-muted uppercase">
               A day in the book
             </p>
 
@@ -116,10 +118,8 @@ export default async function LandingPage() {
               ].map((writer) => (
                 <div key={writer.label}>
                   <div className="flex items-baseline gap-2.5">
-                    <span className="inline-block h-px w-6 bg-brand/60" />
-                    <span className="font-serif text-xs tracking-wide text-ink-muted">
-                      {writer.label}
-                    </span>
+                    <span className="inline-block h-px w-6 bg-brand" />
+                    <span className="text-xs tracking-wide text-ink-muted">{writer.label}</span>
                   </div>
                   <div className="mt-3 space-y-2.5">
                     {writer.widths.map((width, index) => (

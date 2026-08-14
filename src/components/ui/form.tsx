@@ -2,8 +2,10 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
+// `rule-strong` rather than `rule`: a form control needs a visible edge to read
+// as something you can type into, especially against the dark surface.
 const controlClasses =
-  "w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-muted transition-colors focus:border-brand disabled:opacity-60";
+  "w-full rounded-lg border border-rule-strong bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-muted transition-colors hover:border-ink-muted focus:border-brand disabled:opacity-60";
 
 /**
  * A labelled control with room for a hint and an error.

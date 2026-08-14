@@ -10,7 +10,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getBook, getBookMembers, getBookStats } from "@/lib/books/queries";
 import { formatLongDate, formatShortDate } from "@/lib/date/calendar-date";
 import { groupEntriesByDay } from "@/lib/entries/compile";
-import { getFavorites, getMyDrafts, getRecentEntries } from "@/lib/entries/queries";
+import { getFavorites, getMyDrafts, getRecentEntries, signEntryMedia } from "@/lib/entries/queries";
 
 export default async function BookHomePage({
   params,
@@ -31,6 +31,7 @@ export default async function BookHomePage({
 
   const memberMap = new Map(members.map((member) => [member.userId, member]));
   const days = groupEntriesByDay(recent, "desc");
+  const mediaUrls = await signEntryMedia(recent);
 
   const hasWrittenToday = recent.some(
     (entry) => entry.entryDate === book.today && entry.authorId === user?.id,
@@ -129,6 +130,7 @@ export default async function BookHomePage({
                       bookId={bookId}
                       canEdit={entry.authorId === user?.id}
                       isFavorite={favorites.has(entry.id)}
+                      mediaUrls={mediaUrls}
                     />
                   ))}
                 </div>

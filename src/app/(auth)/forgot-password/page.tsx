@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ForgotPasswordForm } from "./forgot-password-form";
@@ -12,7 +12,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1.5 text-center">
-        <h1 className="font-serif text-2xl text-ink">Reset your password</h1>
+        <h1 className="font-serif text-4xl tracking-[-0.015em] text-ink">Reset your password</h1>
         <p className="text-sm text-ink-muted">
           We will email you a link to choose a new one.
         </p>

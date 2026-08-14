@@ -25,9 +25,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link
             href="/library"
-            className="font-serif text-base tracking-tight text-ink whitespace-nowrap"
+            className="font-serif text-xl tracking-[-0.01em] text-ink whitespace-nowrap"
           >
-            Journal <span className="text-ink-muted">&amp;</span> Letter
+            Journal <span className="text-brand">&amp;</span> Letter
           </Link>
 
           <div className="flex items-center gap-1">

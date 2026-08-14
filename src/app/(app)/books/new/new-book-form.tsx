@@ -46,7 +46,7 @@ export function NewBookForm() {
   const [type, setType] = useState<BookType>("shared_letter_book");
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
-  const [coverPreset, setCoverPreset] = useState<CoverPresetId>("linen");
+  const [coverPreset, setCoverPreset] = useState<CoverPresetId>("paper");
   const [designPreset, setDesignPreset] = useState<PresetId>("classic-novel");
   const [inviteEmail, setInviteEmail] = useState("");
 

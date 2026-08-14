@@ -134,8 +134,10 @@ describe("invitation tokens", () => {
 describe("settings parsing", () => {
   it("falls back to sane defaults for junk stored in jsonb", () => {
     // A hand-edited or older row must never blank out a page.
-    expect(parseCover(null).preset).toBe("linen");
-    expect(parseCover({ preset: "not-a-preset" }).preset).toBe("linen");
+    expect(parseCover(null).preset).toBe("paper");
+    // Includes presets that existed before the palette was reworked.
+    expect(parseCover({ preset: "not-a-preset" }).preset).toBe("paper");
+    expect(parseCover({ preset: "linen" }).preset).toBe("paper");
     expect(parseCover("nonsense").imagePath).toBeNull();
     expect(parseDesign(undefined).preset).toBe("classic-novel");
     expect(parseDesign({ preset: "romantic" }).preset).toBe("romantic");

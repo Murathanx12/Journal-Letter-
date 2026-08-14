@@ -53,6 +53,7 @@ export function useAutosave({
   entryDate,
   title,
   content,
+  layout,
   changeCount,
   enabled = true,
 }: {
@@ -61,6 +62,7 @@ export function useAutosave({
   entryDate: string;
   title: string;
   content: RichTextDoc;
+  layout: unknown[];
   /** Incremented by the caller on every edit. 0 means "untouched". */
   changeCount: number;
   enabled?: boolean;
@@ -77,9 +79,9 @@ export function useAutosave({
   // text. Assigned in an effect rather than during render — mutating a ref while
   // rendering is not allowed, and this effect is declared first so it always
   // runs before the debounce effect below.
-  const latest = useRef({ entryDate, title, content, entryId, changeCount });
+  const latest = useRef({ entryDate, title, content, layout, entryId, changeCount });
   useEffect(() => {
-    latest.current = { entryDate, title, content, entryId, changeCount };
+    latest.current = { entryDate, title, content, layout, entryId, changeCount };
   });
 
   const busy = useRef(false);
@@ -120,6 +122,7 @@ export function useAutosave({
               entryDate: snapshot.entryDate,
               title: snapshot.title.trim() ? snapshot.title.trim() : null,
               content: snapshot.content,
+              layout: snapshot.layout,
             }),
           });
 
@@ -173,6 +176,9 @@ export function useAutosave({
       localStorage.setItem(key, JSON.stringify(draft));
     } catch {
       // Quota or private mode. The debounced server save is still coming.
+      // Note the local copy holds the writing only: a page of photographs is
+      // already safe on the server, and storing image data here would blow the
+      // storage quota on the first page.
     }
 
     const timer = setTimeout(() => void save(), 1500);

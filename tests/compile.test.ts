@@ -24,6 +24,7 @@ function entry(overrides: Partial<CompiledEntry> & { id: string }): CompiledEntr
     title: null,
     content: { type: "doc" },
     plainText: "",
+    layout: [],
     correctionState: "original",
     hasOriginal: false,
     tags: [],

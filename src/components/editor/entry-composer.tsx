@@ -7,6 +7,9 @@ import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 
 import { ProofreadPanel } from "@/components/editor/proofread-panel";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { PhotoArranger } from "@/components/media/photo-arranger";
+import { PhotoPanel } from "@/components/media/photo-panel";
+import type { PlacedMedia } from "@/lib/media/placement";
 import {
   localDraftKey,
   readLocalDraft,
@@ -21,6 +24,7 @@ import { applyCorrection, deleteEntry, saveEntry } from "@/lib/entries/actions";
 import type { ProofreadMode } from "@/lib/proofread/types";
 import { countWords, EMPTY_DOC, toPlainText, type RichTextDoc } from "@/lib/text/rich-text";
 import { formatLongDate, type CalendarDate } from "@/lib/date/calendar-date";
+import { cn } from "@/lib/utils/cn";
 import { useHydrated } from "@/lib/utils/use-hydrated";
 
 export type ComposerEntry = {
@@ -33,6 +37,7 @@ export type ComposerEntry = {
   sealedUntil: CalendarDate | null;
   hasOriginal: boolean;
   correctionState: "original" | "gentle" | "polish";
+  layout: PlacedMedia[];
 };
 
 export function EntryComposer({
@@ -40,12 +45,17 @@ export function EntryComposer({
   bookToday,
   entry,
   aiAvailable,
+  initialMediaUrls,
+  indentParagraphs,
 }: {
   bookId: string;
   /** Today in the *book's* timezone, computed on the server. */
   bookToday: CalendarDate;
   entry: ComposerEntry | null;
   aiAvailable: boolean;
+  /** Signed URLs for photographs already on the page, keyed by storage path. */
+  initialMediaUrls?: Record<string, string>;
+  indentParagraphs?: boolean;
 }) {
   const router = useRouter();
   const [saving, startSaving] = useTransition();
@@ -62,6 +72,13 @@ export function EntryComposer({
   const [recoveryDismissed, setRecoveryDismissed] = useState(false);
   const editorRef = useRef<Editor | null>(null);
 
+  const [tab, setTab] = useState<"write" | "photos">("write");
+  const [layout, setLayout] = useState<PlacedMedia[]>(entry?.layout ?? []);
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
+  const [mediaUrls, setMediaUrls] = useState<Map<string, string>>(
+    () => new Map(Object.entries(initialMediaUrls ?? {})),
+  );
+
   // A counter rather than a boolean, so "has this exact text been saved?" is a
   // comparison instead of a flag somebody has to remember to reset.
   const [changeCount, setChangeCount] = useState(0);
@@ -73,6 +90,7 @@ export function EntryComposer({
     entryDate,
     title,
     content,
+    layout,
     changeCount,
   });
 
@@ -142,6 +160,7 @@ export function EntryComposer({
         entryDate,
         title: title.trim() ? title.trim() : null,
         content,
+        layout,
         status,
         tags: tagsText
           .split(",")
@@ -256,12 +275,77 @@ export function EntryComposer({
         </p>
       ) : null}
 
-      <RichTextEditor
-        initialContent={entry?.content ?? EMPTY_DOC}
-        placeholder="Good morning…"
-        onChange={handleChange}
-        onEditorReady={handleEditorReady}
-      />
+      {/*
+        Writing and arranging are separate modes on purpose: dragging a picture
+        and selecting text are the same gesture, so putting handles on a live
+        editor makes both worse.
+      */}
+      <div role="tablist" aria-label="Editing mode" className="flex gap-1 border-b border-rule">
+        {(["write", "photos"] as const).map((value) => (
+          <button
+            key={value}
+            role="tab"
+            type="button"
+            aria-selected={tab === value}
+            onClick={() => setTab(value)}
+            className={cn(
+              "-mb-px border-b-2 px-3 py-2 text-sm transition-colors",
+              tab === value
+                ? "border-ink text-ink"
+                : "border-transparent text-ink-muted hover:text-ink",
+            )}
+          >
+            {value === "write"
+              ? "Write"
+              : `Photos${layout.length > 0 ? ` (${layout.length})` : ""}`}
+          </button>
+        ))}
+      </div>
+
+      {/*
+        The editor stays mounted while the Photos tab is open — unmounting it
+        would throw away the undo history and the caret position.
+      */}
+      <div hidden={tab !== "write"}>
+        <RichTextEditor
+          initialContent={entry?.content ?? EMPTY_DOC}
+          placeholder="Good morning…"
+          onChange={handleChange}
+          onEditorReady={handleEditorReady}
+        />
+      </div>
+
+      {tab === "photos" ? (
+        <div className="space-y-4">
+          <PhotoArranger
+            content={content}
+            items={layout}
+            urls={mediaUrls}
+            selectedId={selectedMediaId}
+            onSelect={setSelectedMediaId}
+            onChange={(next) => {
+              setLayout(next);
+              touch();
+            }}
+            indentParagraphs={indentParagraphs ?? false}
+          />
+
+          <PhotoPanel
+            bookId={bookId}
+            entryId={autosave.entryId}
+            items={layout}
+            selectedId={selectedMediaId}
+            onSelect={setSelectedMediaId}
+            onChange={(next) => {
+              setLayout(next);
+              touch();
+            }}
+            onAddUrl={(path, url) =>
+              setMediaUrls((current) => new Map(current).set(path, url))
+            }
+          />
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-muted">
         <SaveIndicator status={autosave.status} lastSavedAt={autosave.lastSavedAt} />

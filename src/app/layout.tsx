@@ -1,5 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Caveat, Cormorant_Garamond, Courier_Prime, Inter, Literata, Lora } from "next/font/google";
+import {
+  Caveat,
+  Cormorant_Garamond,
+  Courier_Prime,
+  Instrument_Serif,
+  Inter,
+  Literata,
+  Lora,
+  Schibsted_Grotesk,
+} from "next/font/google";
 
 import { ThemeScript } from "@/components/theme/theme-script";
 
@@ -27,6 +36,24 @@ const courierPrime = Courier_Prime({
 });
 const caveat = Caveat({ subsets: ["latin"], variable: "--font-caveat", display: "swap" });
 
+/*
+ * The interface's own two faces, kept separate from the six a reader can choose
+ * for their book. A high-contrast display serif for titles and the wordmark,
+ * and a crisp grotesque for everything functional — labels, buttons, controls.
+ */
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-display",
+  display: "swap",
+});
+const schibsted = Schibsted_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-ui",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: {
     default: "Journal & Letter",
@@ -42,8 +69,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf7f2" },
-    { media: "(prefers-color-scheme: dark)", color: "#14120f" },
+    { media: "(prefers-color-scheme: light)", color: "#fbfbf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e0e12" },
   ],
 };
 
@@ -52,7 +79,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${literata.variable} ${lora.variable} ${inter.variable} ${cormorant.variable} ${courierPrime.variable} ${caveat.variable}`}
+      className={`${instrumentSerif.variable} ${schibsted.variable} ${literata.variable} ${lora.variable} ${inter.variable} ${cormorant.variable} ${courierPrime.variable} ${caveat.variable}`}
     >
       <head>
         <ThemeScript />

@@ -24,8 +24,12 @@ export function PageHeader({
 }) {
   return (
     <div className={cn("flex flex-wrap items-end justify-between gap-4", className)}>
-      <div className="space-y-1">
-        <h1 className="font-serif text-2xl leading-tight text-ink sm:text-3xl">{title}</h1>
+      <div className="space-y-1.5">
+        {/* Instrument Serif is a display face — it needs size and slightly
+            tightened tracking to look deliberate rather than spindly. */}
+        <h1 className="font-serif text-3xl leading-[1.1] tracking-[-0.015em] text-ink sm:text-4xl">
+          {title}
+        </h1>
         {description ? <p className="text-sm text-ink-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}

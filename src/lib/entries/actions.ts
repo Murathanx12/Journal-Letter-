@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { describeDatabaseError, fail, ok, type ActionResult } from "@/lib/actions/result";
 import { requireUser } from "@/lib/auth/session";
+import { parseLayout } from "@/lib/media/placement";
 import { asJson } from "@/lib/supabase/json";
 import { createClient } from "@/lib/supabase/server";
 import { asRichTextDoc, fromPlainText, toPlainText, type RichTextDoc } from "@/lib/text/rich-text";
@@ -72,6 +73,9 @@ export async function saveEntry(input: unknown): Promise<ActionResult<SavedEntry
   const supabase = await createClient();
   const content = values.content as unknown as RichTextDoc;
   const plainText = toPlainText(asRichTextDoc(content));
+  // Normalised here rather than trusted: clamps every coordinate and drops
+  // anything that is not a placement we recognise.
+  const layout = parseLayout(values.layout);
 
   if (values.status === "published" && plainText.trim().length === 0) {
     return fail("There is nothing written yet.");
@@ -85,6 +89,7 @@ export async function saveEntry(input: unknown): Promise<ActionResult<SavedEntry
         title: values.title,
         content: asJson(content),
         plain_text: plainText,
+        layout: asJson(layout),
         status: values.status,
         tags: values.tags,
         mood: values.mood,
@@ -125,6 +130,7 @@ export async function saveEntry(input: unknown): Promise<ActionResult<SavedEntry
       title: values.title,
       content: asJson(content),
       plain_text: plainText,
+      layout: asJson(layout),
       status: values.status,
       tags: values.tags,
       mood: values.mood,
@@ -196,7 +202,7 @@ export async function reorderEntry(input: unknown): Promise<ActionResult> {
 
   const { data: dayRows } = await supabase
     .from("entries")
-    .select("id, author_id, entry_date, within_day_order, created_at, title, content, plain_text, correction_state, original_content, tags, mood, location, sealed_until, status")
+    .select("id, author_id, entry_date, within_day_order, created_at, title, content, plain_text, correction_state, original_content, tags, mood, location, sealed_until, status, layout")
     .eq("book_id", bookId)
     .eq("entry_date", target.entry_date);
 
@@ -209,6 +215,7 @@ export async function reorderEntry(input: unknown): Promise<ActionResult> {
     title: row.title,
     content: row.content,
     plainText: row.plain_text,
+    layout: parseLayout(row.layout),
     correctionState: row.correction_state,
     hasOriginal: row.original_content !== null,
     tags: row.tags,

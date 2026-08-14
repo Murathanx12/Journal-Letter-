@@ -10,44 +10,55 @@
 /*
  * The palette.
  *
- * Warm paper rather than white, ink rather than black. Nothing here is
- * saturated: the interface is meant to disappear behind the writing, and the
- * only colour with any real presence is the one each writer picks for their own
- * name. Contrast on text/background clears WCAG AA comfortably in both themes.
+ * Near-monochrome, on a paper white that is cool rather than beige. The
+ * interface is meant to disappear behind the writing, so it carries no colour
+ * of its own at all — the single accent is a saturated ink blue, chosen
+ * because this is an application about writing letters, and that is the colour
+ * a letter is written in.
+ *
+ * The only other colour on a page belongs to the writers themselves, in the
+ * accent each one picks for their name. Text/background contrast clears WCAG AA
+ * comfortably in both themes.
  */
 @theme {
-  --color-paper: #faf7f2;
+  --color-paper: #fbfbf9;
   --color-surface: #ffffff;
-  --color-surface-sunk: #f3efe8;
-  --color-ink: #1e1b17;
-  --color-ink-soft: #4a443c;
-  --color-ink-muted: #756c60;
-  --color-rule: #e4dcd0;
-  --color-rule-strong: #d2c7b7;
-  --color-brand: #7c5a3a;
-  --color-brand-soft: #a07a54;
-  --color-danger: #9b3b2f;
-  --color-success: #3f6b4a;
+  --color-surface-sunk: #f1f1ee;
+  --color-ink: #17171b;
+  --color-ink-soft: #43434d;
+  --color-ink-muted: #74747f;
+  --color-rule: #e6e6e2;
+  --color-rule-strong: #d2d2cd;
+  --color-brand: #2743d6;
+  --color-brand-soft: #5a72e8;
+  --color-danger: #c02f2f;
+  --color-success: #10795a;
 
-  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: var(--font-literata), Georgia, "Times New Roman", serif;
+  /* Schibsted Grotesk for the interface. */
+  --font-sans: var(--font-ui), system-ui, -apple-system, "Segoe UI", sans-serif;
+  /*
+   * Tailwind's `font-serif` is the interface's *display* face, used for titles
+   * and the wordmark. Book text never relies on it: the reading surface always
+   * sets `--book-body-font` explicitly from the reader's chosen typeface.
+   */
+  --font-serif: var(--font-display), "Iowan Old Style", Georgia, serif;
 
   --radius-card: 0.75rem;
 }
 
 .dark {
-  --color-paper: #14120f;
-  --color-surface: #1b1815;
-  --color-surface-sunk: #221e1a;
-  --color-ink: #ece7df;
-  --color-ink-soft: #c6bfb4;
-  --color-ink-muted: #968d80;
-  --color-rule: #302b25;
-  --color-rule-strong: #443d34;
-  --color-brand: #c9a37a;
-  --color-brand-soft: #a98456;
-  --color-danger: #d98878;
-  --color-success: #8fb89a;
+  --color-paper: #0e0e12;
+  --color-surface: #16161b;
+  --color-surface-sunk: #1e1e25;
+  --color-ink: #ececed;
+  --color-ink-soft: #b6b6bf;
+  --color-ink-muted: #82828d;
+  --color-rule: #26262e;
+  --color-rule-strong: #383842;
+  --color-brand: #8fa5ff;
+  --color-brand-soft: #6f88f2;
+  --color-danger: #ef7b7b;
+  --color-success: #4fbf9a;
 }
 
 @layer base {
@@ -105,7 +116,8 @@
    * without any conditional class names.
    */
   .book-prose {
-    font-family: var(--book-body-font, var(--font-serif));
+    /* Falls back to Literata, never to the interface's display face. */
+    font-family: var(--book-body-font, var(--font-literata), Georgia, serif);
     font-size: var(--book-base-size, 18px);
     line-height: var(--book-line-height, 1.75);
     color: var(--color-ink);

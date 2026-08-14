@@ -7,7 +7,12 @@ import { RevertToOriginal } from "@/components/editor/revert-to-original";
 import { EntryComposer } from "@/components/editor/entry-composer";
 import { getSessionUser } from "@/lib/auth/session";
 import { getBook, getBookMembers } from "@/lib/books/queries";
-import { getEntry, getFavorites } from "@/lib/entries/queries";
+import {
+  getEntry,
+  getEntryAttachments,
+  getFavorites,
+  signEntryMedia,
+} from "@/lib/entries/queries";
 import { featureFlags } from "@/lib/env";
 import { asRichTextDoc } from "@/lib/text/rich-text";
 
@@ -35,6 +40,15 @@ export default async function EntryPage({
 
   // Only the author edits their own words. Everyone else reads them.
   if (isAuthor && book.canWrite) {
+    // Photographs already uploaded against this entry, plus anything placed on
+    // the page, so the arranger can render them without a round trip.
+    const attachments = await getEntryAttachments(bookId, entry.id);
+    const placed = await signEntryMedia([entry]);
+    const mediaUrls: Record<string, string> = Object.fromEntries(placed);
+    for (const attachment of attachments) {
+      if (attachment.url) mediaUrls[attachment.path] = attachment.url;
+    }
+
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         {entry.hasOriginal ? (
@@ -58,8 +72,11 @@ export default async function EntryPage({
             sealedUntil: entry.sealedUntil,
             hasOriginal: entry.hasOriginal,
             correctionState: entry.correctionState,
+            layout: entry.layout,
           }}
           aiAvailable={featureFlags.aiProofreading}
+          initialMediaUrls={mediaUrls}
+          indentParagraphs={book.resolvedDesign.preset.indentParagraphs}
         />
       </div>
     );
@@ -76,6 +93,7 @@ export default async function EntryPage({
           bookId={bookId}
           canEdit={false}
           isFavorite={favorites.has(entry.id)}
+          mediaUrls={await signEntryMedia([entry])}
         />
       </BookSurface>
     </div>

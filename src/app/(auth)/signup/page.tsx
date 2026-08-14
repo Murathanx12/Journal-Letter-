@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 
 import { GoogleButton } from "@/components/auth/google-button";
@@ -22,7 +22,7 @@ export default async function SignUpPage({
   return (
     <div className="space-y-6">
       <div className="space-y-1.5 text-center">
-        <h1 className="font-serif text-2xl text-ink">Start your first book</h1>
+        <h1 className="font-serif text-4xl tracking-[-0.015em] text-ink">Start your first book</h1>
         <p className="text-sm text-ink-muted">A journal for yourself, or letters with someone.</p>
       </div>
 

@@ -74,10 +74,19 @@ export const updateBookSchema = z.object({
 // Entries
 // -----------------------------------------------------------------------------
 
+/**
+ * Page layout arrives as loose objects and is normalised server-side by
+ * `parseLayout`, which clamps every number and drops anything unrecognised.
+ * Validating the shape here as well would mean maintaining the same rules
+ * twice.
+ */
+export const layoutSchema = z.array(z.looseObject({})).max(40).default([]);
+
 export const saveEntrySchema = z.object({
   bookId: z.uuid(),
   /** Absent when creating. */
   entryId: z.uuid().optional(),
+  layout: layoutSchema,
   entryDate: calendarDate,
   title: optionalText(160),
   content: richTextDoc,

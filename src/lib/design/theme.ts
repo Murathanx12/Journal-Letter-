@@ -222,7 +222,7 @@ export function getPreset(value: string | null | undefined): TypographyPreset {
 // nobody's letters become hard to read.
 // -----------------------------------------------------------------------------
 
-export type AccentId = "ink" | "sepia" | "sage" | "plum" | "sky" | "clay";
+export type AccentId = "ink" | "indigo" | "teal" | "plum" | "rose" | "moss";
 
 export type AccentDefinition = {
   id: AccentId;
@@ -232,12 +232,12 @@ export type AccentDefinition = {
 };
 
 export const ACCENTS: Record<AccentId, AccentDefinition> = {
-  ink: { id: "ink", label: "Ink", light: "#2f3a4a", dark: "#c3cede" },
-  sepia: { id: "sepia", label: "Sepia", light: "#7a5230", dark: "#d7b18c" },
-  sage: { id: "sage", label: "Sage", light: "#4b6b52", dark: "#a9c8ae" },
-  plum: { id: "plum", label: "Plum", light: "#6b4462", dark: "#d0aac6" },
-  sky: { id: "sky", label: "Sky", light: "#3a5f7d", dark: "#a6c6dd" },
-  clay: { id: "clay", label: "Clay", light: "#8a4b3c", dark: "#e0aa9b" },
+  ink: { id: "ink", label: "Ink", light: "#3a3a45", dark: "#b8b8c6" },
+  indigo: { id: "indigo", label: "Indigo", light: "#3345c2", dark: "#96a9ff" },
+  teal: { id: "teal", label: "Teal", light: "#0f6f68", dark: "#5cc9bf" },
+  plum: { id: "plum", label: "Plum", light: "#6b3f74", dark: "#cba6d6" },
+  rose: { id: "rose", label: "Rose", light: "#a83a5b", dark: "#f0a0b6" },
+  moss: { id: "moss", label: "Moss", light: "#4a6b3a", dark: "#a8c893" },
 };
 
 export const ACCENT_IDS = Object.keys(ACCENTS) as AccentId[];
@@ -255,12 +255,12 @@ export function getAccent(value: string | null | undefined): AccentDefinition {
 // -----------------------------------------------------------------------------
 
 export type CoverPresetId =
-  | "linen"
+  | "paper"
   | "midnight"
   | "sage"
   | "dusk"
   | "letterpress"
-  | "oxblood";
+  | "ink";
 
 export type CoverPreset = {
   id: CoverPresetId;
@@ -274,47 +274,47 @@ export type CoverPreset = {
 };
 
 export const COVER_PRESETS: Record<CoverPresetId, CoverPreset> = {
-  linen: {
-    id: "linen",
-    label: "Linen",
-    background: "linear-gradient(160deg, #f4efe6 0%, #e7dfd2 100%)",
-    foreground: "#3b3227",
-    rule: "rgba(59, 50, 39, 0.35)",
+  paper: {
+    id: "paper",
+    label: "Paper",
+    background: "linear-gradient(160deg, #f7f7f3 0%, #e7e7e1 100%)",
+    foreground: "#26262b",
+    rule: "rgba(38, 38, 43, 0.32)",
   },
   midnight: {
     id: "midnight",
     label: "Midnight",
-    background: "linear-gradient(160deg, #1c2331 0%, #0f141d 100%)",
-    foreground: "#e8ecf3",
-    rule: "rgba(232, 236, 243, 0.35)",
+    background: "linear-gradient(160deg, #1c1c26 0%, #0c0c11 100%)",
+    foreground: "#eaeaf0",
+    rule: "rgba(234, 234, 240, 0.32)",
   },
   sage: {
     id: "sage",
     label: "Sage",
-    background: "linear-gradient(160deg, #e3ece2 0%, #c9d8c7 100%)",
-    foreground: "#2e3d2f",
-    rule: "rgba(46, 61, 47, 0.35)",
+    background: "linear-gradient(160deg, #e4ece6 0%, #c6d6ca 100%)",
+    foreground: "#27362c",
+    rule: "rgba(39, 54, 44, 0.32)",
   },
   dusk: {
     id: "dusk",
     label: "Dusk",
-    background: "linear-gradient(160deg, #efe0dc 0%, #cbb3bd 100%)",
-    foreground: "#3e2c33",
-    rule: "rgba(62, 44, 51, 0.35)",
+    background: "linear-gradient(160deg, #eae2f0 0%, #bfb2d2 100%)",
+    foreground: "#2f2740",
+    rule: "rgba(47, 39, 64, 0.32)",
   },
   letterpress: {
     id: "letterpress",
     label: "Letterpress",
-    background: "linear-gradient(160deg, #fbfaf7 0%, #eeebe4 100%)",
-    foreground: "#26241f",
-    rule: "rgba(38, 36, 31, 0.4)",
+    background: "linear-gradient(160deg, #fcfcfa 0%, #eeeeea 100%)",
+    foreground: "#1f1f24",
+    rule: "rgba(31, 31, 36, 0.35)",
   },
-  oxblood: {
-    id: "oxblood",
-    label: "Oxblood",
-    background: "linear-gradient(160deg, #5a2b2b 0%, #3a1a1c 100%)",
-    foreground: "#f3e6e2",
-    rule: "rgba(243, 230, 226, 0.35)",
+  ink: {
+    id: "ink",
+    label: "Ink",
+    background: "linear-gradient(160deg, #26346f 0%, #121838 100%)",
+    foreground: "#eef1ff",
+    rule: "rgba(238, 241, 255, 0.34)",
   },
 };
 
@@ -325,7 +325,7 @@ export function isCoverPresetId(value: string): value is CoverPresetId {
 }
 
 export function getCoverPreset(value: string | null | undefined): CoverPreset {
-  return value && isCoverPresetId(value) ? COVER_PRESETS[value] : COVER_PRESETS.linen;
+  return value && isCoverPresetId(value) ? COVER_PRESETS[value] : COVER_PRESETS.paper;
 }
 
 // -----------------------------------------------------------------------------
@@ -356,7 +356,7 @@ export type BookDesign = {
   pageSize: "A5" | "A4" | "LETTER" | "DIGEST";
 };
 
-export const DEFAULT_COVER: BookCover = { preset: "linen", imagePath: null };
+export const DEFAULT_COVER: BookCover = { preset: "paper", imagePath: null };
 
 export const DEFAULT_DESIGN: BookDesign = {
   preset: "classic-novel",

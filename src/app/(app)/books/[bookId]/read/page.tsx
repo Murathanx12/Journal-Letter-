@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/surface";
 import { getSessionUser } from "@/lib/auth/session";
 import { getBook, getBookMembers } from "@/lib/books/queries";
 import { formatLongDate, isCalendarDate, type CalendarDate } from "@/lib/date/calendar-date";
-import { getBookDays, getFavorites, getSealedPreviews } from "@/lib/entries/queries";
+import { getBookDays, getFavorites, getSealedPreviews, signDayMedia } from "@/lib/entries/queries";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -44,6 +44,7 @@ export default async function ReadPage({
   ]);
 
   const memberMap = new Map(members.map((member) => [member.userId, member]));
+  const mediaUrls = await signDayMedia(page.days);
 
   // Sealed letters are surfaced as placeholders on their own day. The content
   // is not merely hidden here — the row is withheld by an RLS policy.
@@ -117,6 +118,7 @@ export default async function ReadPage({
                     bookId={bookId}
                     canEdit={entry.authorId === user?.id}
                     isFavorite={favorites.has(entry.id)}
+                    mediaUrls={mediaUrls}
                   />
                 ))}
 

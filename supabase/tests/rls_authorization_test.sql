@@ -175,6 +175,32 @@ begin
   insert into rls_results values ('Member cannot edit another persons letter', affected = 0, 'rows updated=' || affected);
 end $$;
 
+-- --- The owner's own access ---------------------------------------------------
+--
+-- `books` has a second SELECT policy so an owner can read a book they own even
+-- before the membership trigger has run. Without it, `INSERT ... RETURNING id`
+-- fails and creating a book returns 403. These assert that it works and that it
+-- widens nothing for anybody else.
+
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}';
+
+insert into rls_results
+select 'A can read the book A owns', count(*) = 1, 'rows=' || count(*)
+from public.books where id = 'cccccccc-0000-4000-8000-000000000003';
+
+do $$
+declare v_id uuid;
+begin
+  insert into public.books (owner_id, type, title, timezone)
+  values ('aaaaaaaa-0000-4000-8000-000000000001', 'personal_journal', 'Returning probe', 'UTC')
+  returning id into v_id;
+  insert into rls_results values ('Owner can INSERT..RETURNING a new book', v_id is not null, 'id returned');
+exception when others then
+  insert into rls_results values ('Owner can INSERT..RETURNING a new book', false, 'refused: ' || sqlstate);
+end $$;
+
 -- --- Anonymous ---------------------------------------------------------------
 
 reset role;

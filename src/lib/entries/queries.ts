@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/supabase/database.types";
 import { asRichTextDoc } from "@/lib/text/rich-text";
 import type { CalendarDate } from "@/lib/date/calendar-date";
+import { parseLayout, pathsInLayout, type PlacedMedia } from "@/lib/media/placement";
+import { signMediaPaths } from "@/lib/media/storage";
 
 import { groupEntriesByDay, type BookDay, type CompiledEntry } from "./compile";
 
@@ -14,7 +16,7 @@ import { groupEntriesByDay, type BookDay, type CompiledEntry } from "./compile";
  */
 
 const ENTRY_COLUMNS =
-  "id, book_id, author_id, entry_date, within_day_order, created_at, updated_at, title, content, plain_text, original_content, original_plain_text, correction_state, mood, tags, location, sealed_until, status";
+  "id, book_id, author_id, entry_date, within_day_order, created_at, updated_at, title, content, plain_text, original_content, original_plain_text, correction_state, mood, tags, location, sealed_until, status, layout";
 
 type EntryRow = Pick<
   Tables<"entries">,
@@ -36,6 +38,7 @@ type EntryRow = Pick<
   | "location"
   | "sealed_until"
   | "status"
+  | "layout"
 >;
 
 function toCompiled(row: EntryRow): CompiledEntry {
@@ -48,6 +51,7 @@ function toCompiled(row: EntryRow): CompiledEntry {
     title: row.title,
     content: row.content,
     plainText: row.plain_text,
+    layout: parseLayout(row.layout),
     correctionState: row.correction_state,
     hasOriginal: row.original_content !== null,
     tags: row.tags,
@@ -222,6 +226,52 @@ export async function getEntriesForDate(bookId: string, date: CalendarDate): Pro
     .order("created_at", { ascending: true });
 
   return (data ?? []).map(toCompiled);
+}
+
+/**
+ * Signed URLs for every photograph across a set of entries, in one round trip.
+ *
+ * Signing per image would be a request per picture on a page that might have
+ * dozens.
+ */
+export async function signEntryMedia(
+  entries: readonly { layout: readonly PlacedMedia[] }[],
+): Promise<Map<string, string>> {
+  const paths = entries.flatMap((entry) => pathsInLayout(entry.layout));
+  if (paths.length === 0) return new Map();
+  return signMediaPaths(paths);
+}
+
+/** Same, for entries already grouped into days. */
+export async function signDayMedia(
+  days: readonly { entries: readonly { layout: readonly PlacedMedia[] }[] }[],
+): Promise<Map<string, string>> {
+  return signEntryMedia(days.flatMap((day) => day.entries));
+}
+
+/** Photographs uploaded against an entry, for the editor's picker. */
+export async function getEntryAttachments(bookId: string, entryId: string) {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("attachments")
+    .select("id, storage_path, width, height, caption")
+    .eq("book_id", bookId)
+    .eq("entry_id", entryId)
+    .order("created_at", { ascending: true })
+    .limit(60);
+
+  const rows = data ?? [];
+  const urls = await signMediaPaths(rows.map((row) => row.storage_path));
+
+  return rows.map((row) => ({
+    id: row.id,
+    path: row.storage_path,
+    url: urls.get(row.storage_path) ?? null,
+    width: row.width,
+    height: row.height,
+    caption: row.caption,
+  }));
 }
 
 export type CalendarDay = {
