@@ -20,7 +20,7 @@ function sampleDocument(overrides: Partial<ExportDocument> = {}): ExportDocument
   return {
     title: "Our Letters",
     subtitle: "Hong Kong and London",
-    contributors: ["Murathan", "Rosie"],
+    contributors: ["Murathan", "Rossi"],
     dateRangeLabel: "14 August 2026",
     design: resolveDesign(DEFAULT_DESIGN),
     includeCover: true,
@@ -39,7 +39,7 @@ function sampleDocument(overrides: Partial<ExportDocument> = {}): ExportDocument
           },
           {
             id: "entry-2",
-            authorName: "Rosie",
+            authorName: "Rossi",
             title: "Before the alarm",
             blocks: toExportBlocks(fromPlainText("I woke up early again.")),
             corrected: true,
@@ -128,8 +128,8 @@ describe("exportFilename", () => {
   it("makes a filesystem-safe name that still looks like the book", () => {
     expect(exportFilename("Our Letters", "pdf")).toBe("our-letters.pdf");
     // Punctuation is dropped and the resulting run of spaces collapses to one
-    // hyphen, so "Rosie & Murat: 2026" does not become "rosie--murat".
-    expect(exportFilename("Rosie & Murat: 2026", "docx")).toBe("rosie-murat-2026.docx");
+    // hyphen, so "Rossi & Murat: 2026" does not become "rossi--murat".
+    expect(exportFilename("Rossi & Murat: 2026", "docx")).toBe("rossi-murat-2026.docx");
   });
 
   it("falls back when the title has nothing usable in it", () => {

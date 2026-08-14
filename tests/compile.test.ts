@@ -38,10 +38,10 @@ function entry(overrides: Partial<CompiledEntry> & { id: string }): CompiledEntr
 
 describe("groupEntriesByDay", () => {
   it("puts whoever submitted first at the top of the day", () => {
-    // Murathan writes at 07:00, Rosie at 09:00, but they arrive out of order.
-    const rosie = entry({
-      id: "rosie",
-      authorId: "rosie",
+    // Murathan writes at 07:00, Rossi at 09:00, but they arrive out of order.
+    const rossi = entry({
+      id: "rossi",
+      authorId: "rossi",
       withinDayOrder: 1,
       createdAt: "2026-08-14T09:00:00.000Z",
     });
@@ -52,9 +52,9 @@ describe("groupEntriesByDay", () => {
       createdAt: "2026-08-14T07:00:00.000Z",
     });
 
-    const [day] = groupEntriesByDay([rosie, murathan]);
+    const [day] = groupEntriesByDay([rossi, murathan]);
 
-    expect(day?.entries.map((item) => item.id)).toEqual(["murathan", "rosie"]);
+    expect(day?.entries.map((item) => item.id)).toEqual(["murathan", "rossi"]);
   });
 
   it("falls back to creation time when the explicit order ties", () => {

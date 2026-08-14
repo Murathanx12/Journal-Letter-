@@ -74,7 +74,7 @@ describe("what it refuses to touch", () => {
   });
 
   it("leaves names and places alone", async () => {
-    const sentence = "We walked around Victoria Harbour with Murathan and Rosie";
+    const sentence = "We walked around Victoria Harbour with Murathan and Rossi";
     expect(await check(sentence)).toBe(sentence);
   });
 

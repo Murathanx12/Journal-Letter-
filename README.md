@@ -54,7 +54,7 @@ August, and have it appear in June where it belongs.
 
 **Daily compilation.** The book is ordered by date. Within a day, whoever
 submitted first appears first. If Murathan writes on the morning of 14 August
-and Rosie writes that afternoon, the book shows Murathan then Rosie, under one
+and Rossi writes that afternoon, the book shows Murathan then Rossi, under one
 date heading, like a page of a printed book.
 
 **Author identity.** Each writer picks a typeface, an optional handwritten
