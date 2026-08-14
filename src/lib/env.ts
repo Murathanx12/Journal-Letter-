@@ -42,14 +42,6 @@ export const serverEnv = {
     return "http://localhost:3000";
   },
 
-  /** Optional. When absent, AI proofreading is disabled rather than faked. */
-  get anthropicApiKey() {
-    return process.env.ANTHROPIC_API_KEY ?? null;
-  },
-  get proofreadModel() {
-    return process.env.PROOFREAD_MODEL ?? "claude-sonnet-5";
-  },
-
   /** Optional. When absent, the Google Docs export button explains the setup. */
   get googleDocsClientId() {
     return process.env.GOOGLE_DOCS_CLIENT_ID ?? null;
@@ -60,9 +52,6 @@ export const serverEnv = {
 } as const;
 
 export const featureFlags = {
-  get aiProofreading() {
-    return Boolean(serverEnv.anthropicApiKey);
-  },
   /**
    * "Continue with Google" is hidden until the provider is actually enabled in
    * the Supabase dashboard. Offering a button that can only ever answer

@@ -15,7 +15,6 @@
     "verify": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.117.1",
     "@react-pdf/renderer": "^4.6.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",

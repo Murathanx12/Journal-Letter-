@@ -30,7 +30,7 @@ bubbles anywhere in it.
 - [Supabase setup](#supabase-setup)
 - [Google sign-in setup](#google-sign-in-setup)
 - [Google Docs export setup](#google-docs-export-setup)
-- [AI proofreading setup](#ai-proofreading-setup)
+- [Spell checking](#spell-checking)
 - [Environment variables](#environment-variables)
 - [Running the tests](#running-the-tests)
 - [Deploying to Vercel](#deploying-to-vercel)
@@ -75,9 +75,9 @@ width, so a layout made on a phone looks the same on a laptop.
 
 **Preservation.** Optional proofreading fixes obvious mistakes without touching
 slang, pet names, mixed languages or repeated letters — and never replaces the
-original, which stays recoverable and separately exportable forever. Its default
-mode is *spelling only*, and it is enforced mechanically rather than merely
-requested: see [AI proofreading](#ai-proofreading-setup).
+original, which stays recoverable and separately exportable forever. It suggests
+only, never applies, and every correction is undoable with Ctrl/⌘+Z: see
+[Spell checking](#spell-checking).
 
 **Export.** A typeset PDF, a real `.docx`, or a Google Doc, for the whole book or
 any date range, printed from either the original writing or the corrected text.
@@ -388,20 +388,46 @@ If these are not configured, the export screen says so plainly and points at the
 
 ---
 
-## AI proofreading setup
+## Spell checking
 
-Set `ANTHROPIC_API_KEY` (and optionally `PROOFREAD_MODEL`, default
-`claude-sonnet-5`). Without it, the proofreading button does not appear and the
-API route returns 503 rather than pretending to work.
+**No configuration, no API key, no cost, no external service.** It runs inside
+this application, so the text never leaves the trust boundary that already holds
+it.
 
-The key is read only on the server. Entry text is sent to the provider **only**
-when a person presses the button — there is no background pass over anybody's
-journal, and no telemetry contains journal contents.
+Two layers, deliberately:
 
-`src/lib/proofread/` is a provider abstraction: `types.ts` defines the boundary,
-`prompts.ts` holds the instructions, `filter.ts` holds the guard rails, and
-`anthropic-provider.ts` is one implementation. Adding another provider means
-writing one more class.
+1. **The browser's own spell checker** is switched on in the editor. It
+   underlines mistakes in whatever languages the reader has installed —
+   including Turkish — with right-click suggestions. This is the multilingual
+   safety net, it is free, and it works offline.
+2. **A list of known English misspellings**, which powers the click-to-fix
+   highlights, plus an accidentally repeated word and a lower-case pronoun "I".
+
+### Why a list of mistakes rather than a dictionary of words
+
+A spelling dictionary was tried first and had to be removed. An English
+dictionary does not know Turkish either, so it treated every Turkish word as a
+mistake and offered the nearest English one — it turned **`askim` into `skim`**.
+Tightening the edit-distance threshold does not rescue it, because short words in
+one language sit one edit away from real words in another: `cok` → `cook`,
+`benim` → `benin`.
+
+There is no threshold that separates "a word in another language" from "an
+English typo", because the difference is not in the spelling. So the question is
+inverted. Rather than asking *"is this word unknown?"* — which mistrusts every
+unfamiliar word — it asks *"is this a specific, known misspelling?"*, which
+mistrusts nothing it has not been told about.
+
+The trade is deliberate: it catches fewer typos than a dictionary would, and in
+exchange it will never touch another language, a pet name, an invented spelling
+or a name. Given the instruction was *"if you are not sure, do not even change
+the spelling"*, that is the right way round — and the browser is still
+underlining everything else.
+
+Adding entries to `src/lib/proofread/common-typos.ts` is safe and welcome: every
+one is a spelling that is simply never correct in English.
+`tests/dictionary.test.ts` pins both what it corrects and what it refuses to
+touch.
 
 **How it behaves.** Nothing is applied for you and nothing is blocked. A
 suspected typo is underlined where it sits in the sentence; clicking it swaps in
@@ -461,8 +487,7 @@ See `.env.example`. Names only, never values.
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | yes | Publishable key; powerless without a session |
 | `NEXT_PUBLIC_SITE_URL` | production | Builds email, OAuth and invitation links |
-| `ANTHROPIC_API_KEY` | optional | Enables AI proofreading |
-| `PROOFREAD_MODEL` | optional | Defaults to `claude-sonnet-5` |
+| `GOOGLE_AUTH_ENABLED` | optional | Shows "Continue with Google" once the provider is enabled in Supabase |
 | `GOOGLE_DOCS_CLIENT_ID` | optional | Enables Google Docs export |
 | `GOOGLE_DOCS_CLIENT_SECRET` | optional | Enables Google Docs export |
 
@@ -514,7 +539,6 @@ vercel env add NEXT_PUBLIC_SUPABASE_URL production
 vercel env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY production
 vercel env add NEXT_PUBLIC_SITE_URL production
 # optional
-vercel env add ANTHROPIC_API_KEY production
 vercel env add GOOGLE_DOCS_CLIENT_ID production
 vercel env add GOOGLE_DOCS_CLIENT_SECRET production
 

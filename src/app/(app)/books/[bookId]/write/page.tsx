@@ -1,7 +1,6 @@
 import { EntryComposer } from "@/components/editor/entry-composer";
 import { getWritableBook } from "@/lib/books/queries";
 import { isCalendarDate } from "@/lib/date/calendar-date";
-import { featureFlags } from "@/lib/env";
 
 export default async function WritePage({
   params,
@@ -26,7 +25,6 @@ export default async function WritePage({
         bookId={book.id}
         bookToday={startDate}
         entry={null}
-        aiAvailable={featureFlags.aiProofreading}
         indentParagraphs={book.resolvedDesign.preset.indentParagraphs}
       />
     </div>

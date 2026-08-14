@@ -44,7 +44,6 @@ export function EntryComposer({
   bookId,
   bookToday,
   entry,
-  aiAvailable,
   initialMediaUrls,
   indentParagraphs,
 }: {
@@ -52,7 +51,6 @@ export function EntryComposer({
   /** Today in the *book's* timezone, computed on the server. */
   bookToday: CalendarDate;
   entry: ComposerEntry | null;
-  aiAvailable: boolean;
   /** Signed URLs for photographs already on the page, keyed by storage path. */
   initialMediaUrls?: Record<string, string>;
   indentParagraphs?: boolean;
@@ -422,7 +420,7 @@ export function EntryComposer({
         </div>
       </details>
 
-      {aiAvailable && tab === "write" ? (
+      {tab === "write" ? (
         <SpellingBar
           bookId={bookId}
           doc={content}

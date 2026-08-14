@@ -87,20 +87,6 @@ export function SpellingBar({
           Check spelling
         </Button>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={loading}
-          onClick={() => void run("polish")}
-          title="A firmer edit that may reword sentences"
-        >
-          {loading && mode === "polish" ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : null}
-          Suggest rewording
-        </Button>
-
         {remaining > 0 ? (
           <Button
             type="button"
@@ -132,9 +118,10 @@ export function SpellingBar({
           </span>
         ) : (
           <>
-            Underlines what looks like a typo. It only ever suggests a near-identical spelling of
-            the same word, so other languages, pet names and made-up spellings are left alone — and
-            anything it is unsure about, it leaves alone too. Nothing is changed unless you click.
+            Underlines what looks like a typo, using a dictionary on this site — no outside
+            service, nothing to pay for. It only ever suggests a near-identical spelling of the
+            same word, so other languages, pet names and made-up spellings are left alone. Nothing
+            changes unless you click.
           </>
         )}
       </p>

@@ -94,6 +94,8 @@ export async function signUpWithPassword(
   const next = safeNextPath(formData.get("next") as string | null);
   const supabase = await createClient();
 
+  let signedIn = false;
+
   try {
     const { data, error } = await supabase.auth.signUp({
       email: parsed.data.email,
@@ -105,13 +107,28 @@ export async function signUpWithPassword(
       },
     });
 
-    if (error) return fail(error.message);
+    if (error) {
+      // GoTrue says this when the address is already registered. Say something
+      // a person can act on.
+      if (/already registered|already exists|user_already/i.test(error.message)) {
+        return fail("There is already an account with that email. Try signing in instead.");
+      }
+      return fail(error.message);
+    }
 
-    // With email confirmation on, Supabase returns a user but no session.
-    return ok({ needsVerification: !data.session });
+    // When "Confirm email" is switched off, Supabase signs the person straight
+    // in and returns a session. When it is on, there is a user but no session
+    // and they have to visit the emailed link first.
+    signedIn = Boolean(data.session);
   } catch {
     return fail("Could not reach the sign-up service. Please try again.");
   }
+
+  // Outside the try: `redirect` works by throwing, so calling it inside would be
+  // caught above and reported as a failure on an account that was just created.
+  if (signedIn) redirect(next);
+
+  return ok({ needsVerification: true });
 }
 
 export async function signInWithGoogle(next: string): Promise<ActionResult> {

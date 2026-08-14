@@ -13,7 +13,6 @@ import {
   getFavorites,
   signEntryMedia,
 } from "@/lib/entries/queries";
-import { featureFlags } from "@/lib/env";
 import { asRichTextDoc } from "@/lib/text/rich-text";
 
 export default async function EntryPage({
@@ -74,7 +73,6 @@ export default async function EntryPage({
             correctionState: entry.correctionState,
             layout: entry.layout,
           }}
-          aiAvailable={featureFlags.aiProofreading}
           initialMediaUrls={mediaUrls}
           indentParagraphs={book.resolvedDesign.preset.indentParagraphs}
         />

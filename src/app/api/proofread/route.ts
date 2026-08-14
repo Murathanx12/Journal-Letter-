@@ -2,20 +2,19 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth/session";
-import { getProofreadProvider } from "@/lib/proofread/anthropic-provider";
-import { ProofreadUnavailableError } from "@/lib/proofread/types";
+import { filterCorrections } from "@/lib/proofread/filter";
+import { getProofreadProvider } from "@/lib/proofread/dictionary-provider";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Proofreading endpoint.
+ * Spell checking endpoint.
  *
- * Three things are true here and all three matter:
+ * Runs a Hunspell dictionary in this process. There is no external service, no
+ * API key and no cost, and the text does not leave the server that already
+ * stores it.
  *
- *   * the caller must be signed in and must be a member of the book, so this
- *     cannot be used as an anonymous proxy to a paid API;
- *   * the API key never leaves the server;
- *   * nothing is sent anywhere until a person presses the button. There is no
- *     background job that reads people's journals.
+ * The caller must still be signed in and a member of the book: the dictionary
+ * is cheap but not free to run, and there is no reason to let a stranger use it.
  */
 
 // Long enough for a properly long letter, short enough to bound cost.
@@ -31,14 +30,6 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-
-  const provider = getProofreadProvider();
-  if (!provider) {
-    return NextResponse.json(
-      { error: "Proofreading is not configured on this deployment." },
-      { status: 503 },
-    );
-  }
 
   let json: unknown;
   try {
@@ -76,17 +67,19 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await provider.proofread({ paragraphs, mode });
-    return NextResponse.json(result);
+    const result = await getProofreadProvider().proofread({ paragraphs, mode });
+
+    // Belt and braces: every suggestion is re-checked against the
+    // spelling-only rules before it is offered to a person.
+    return NextResponse.json({
+      ...result,
+      corrections: filterCorrections(paragraphs, result.corrections, "gentle"),
+    });
   } catch (error) {
-    if (error instanceof ProofreadUnavailableError) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
-    }
-    // Never surface a provider error verbatim — it can contain request echoes.
-    console.error("Proofreading failed", error);
+    console.error("Spell check failed", error);
     return NextResponse.json(
-      { error: "The proofreader could not be reached. Your writing is untouched." },
-      { status: 502 },
+      { error: "The spell checker could not run. Your writing is untouched." },
+      { status: 500 },
     );
   }
 }
