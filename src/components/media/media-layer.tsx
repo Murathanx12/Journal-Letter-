@@ -2,35 +2,42 @@ import type { CSSProperties } from "react";
 
 import { getMask } from "@/lib/media/masks";
 import type { PlacedMedia } from "@/lib/media/placement";
+import { splitByLayer } from "@/lib/media/placement";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * Freely placed photographs.
+ * Photographs stuck onto the pages of a book.
  *
- * Positions are fractions of the column width, and are rendered with container
- * query units (`cqw`) so every coordinate — including the vertical one —
- * resolves against that width. A percentage `top` would resolve against the
- * container's *height*, which depends on how much has been written, so a page
- * arranged today would rearrange itself the moment somebody added a sentence.
- *
- * The layer never receives pointer events: the writing underneath has to stay
- * selectable even when a picture sits on top of it.
+ * Every coordinate is a fraction handed to CSS as a custom property, and
+ * `.page-sticker` turns those fractions into a position. Nothing measures
+ * anything: because the stickers live inside the same column flow as the
+ * writing, `--page` simply steps across by one column plus one gutter, so
+ * "page four of this letter" lands on page four whatever size the page turns
+ * out to be — and turning the page carries the photographs with it.
  */
 
-export function placementStyle(item: PlacedMedia): CSSProperties {
+export function stickerStyle(item: PlacedMedia): CSSProperties {
   return {
-    position: "absolute",
-    left: `${item.x * 100}cqw`,
-    top: `${item.y * 100}cqw`,
-    width: `${item.width * 100}cqw`,
-    height: `${item.width * item.aspect * 100}cqw`,
+    "--page": item.page,
+    "--x": item.x,
+    "--y": item.y,
+    "--w": item.width,
+    // Width ÷ height. `aspect` is stored the other way up, as height ÷ width.
+    "--ar": 1 / (item.aspect || 1),
     transform: `rotate(${item.rotation}deg)${item.flipX ? " scaleX(-1)" : ""}`,
     opacity: item.opacity,
     clipPath: getMask(item.mask).clipPath,
-  };
+  } as CSSProperties;
 }
 
-export function MediaLayer({
+/**
+ * The anchor every sticker on an entry is positioned from.
+ *
+ * It takes no space and sits at the very start of the entry, which — because
+ * each entry begins on a fresh page — puts it exactly at the top-left corner of
+ * the entry's first page.
+ */
+export function PageStickers({
   items,
   urls,
   className,
@@ -42,13 +49,13 @@ export function MediaLayer({
   if (items.length === 0) return null;
 
   return (
-    <div className={cn("pointer-events-none absolute inset-0", className)} aria-hidden={false}>
+    <div className={cn("page-anchor", className)} aria-hidden={false}>
       {items.map((item) => {
         const url = urls.get(item.path);
         if (!url) return null;
 
         return (
-          <div key={item.id} style={placementStyle(item)}>
+          <div key={item.id} className="page-sticker" style={stickerStyle(item)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={url}
@@ -72,8 +79,8 @@ export function MediaLayer({
  * `shape-outside` is the same shape the image is cut to, so the text hugs the
  * silhouette rather than a rectangle around it.
  *
- * `shape-outside` ignores rotation, so a rotated wrapped image gets a small
- * margin to keep its corners off the text.
+ * `shape-outside` ignores rotation, so a rotated wrapped image gets a slightly
+ * larger margin to keep its corners off the writing.
  */
 export function WrappedMedia({
   item,
@@ -94,8 +101,9 @@ export function WrappedMedia({
       className={cn("not-prose", className)}
       style={{
         float: item.side,
-        width: `${item.width * 100}cqw`,
-        height: `${item.width * item.aspect * 100}cqw`,
+        // A percentage of the column, which is the page: no measuring needed.
+        width: `${item.width * 100}%`,
+        aspectRatio: 1 / (item.aspect || 1),
         shapeOutside: mask.shapeOutside === "none" ? undefined : mask.shapeOutside,
         shapeMargin: rotated ? "1.1em" : "0.9em",
         marginLeft: item.side === "right" ? "1.2em" : 0,
@@ -115,5 +123,41 @@ export function WrappedMedia({
         draggable={false}
       />
     </div>
+  );
+}
+
+/**
+ * Every photograph on one entry, in the right order relative to the writing.
+ *
+ * Wrapped pictures must come before the text so the paragraphs that follow flow
+ * around them; the free-standing ones are absolutely positioned, so their place
+ * in the markup only decides what covers what.
+ */
+export function EntryMedia({
+  items,
+  urls,
+  children,
+}: {
+  items: readonly PlacedMedia[];
+  urls: Map<string, string>;
+  children: React.ReactNode;
+}) {
+  const { behind, front, wrapped } = splitByLayer(items);
+
+  // The writing is given a stacking position of its own. Without it, *any*
+  // positioned sticker would paint over the text, because positioned elements
+  // always paint above unpositioned ones no matter what order they are in — so
+  // "behind the writing" would silently mean "in front of it".
+  return (
+    <>
+      <PageStickers items={behind} urls={urls} className="z-0" />
+      <div className="relative z-10">
+        {wrapped.map((item) => (
+          <WrappedMedia key={item.id} item={item} url={urls.get(item.path)} />
+        ))}
+        {children}
+      </div>
+      <PageStickers items={front} urls={urls} className="z-20" />
+    </>
   );
 }

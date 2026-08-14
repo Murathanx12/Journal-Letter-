@@ -14,11 +14,13 @@ import {
   ListOrdered,
   Quote,
   Redo2,
+  Strikethrough,
   Underline as UnderlineIcon,
   Undo2,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { FONTS, FONT_IDS } from "@/lib/design/theme";
 import { cn } from "@/lib/utils/cn";
 
 function ToolbarButton({
@@ -32,7 +34,7 @@ function ToolbarButton({
   active?: boolean;
   disabled?: boolean;
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -59,7 +61,45 @@ function Separator() {
   return <span className="mx-1 h-5 w-px bg-rule" aria-hidden="true" />;
 }
 
-export function EditorToolbar({ editor }: { editor: Editor }) {
+/**
+ * Setting a stretch of writing in a different typeface — a poem in the
+ * handwriting face, a quoted letter in the typewriter one.
+ *
+ * The value stored on the mark is the font's whole CSS stack rather than its
+ * name. That keeps the document self-describing: it renders correctly anywhere
+ * the fonts are loaded, without a lookup table having to travel with it.
+ */
+function FontPicker({ editor }: { editor: Editor }) {
+  const current = (editor.getAttributes("textStyle").fontFamily as string | undefined) ?? "";
+  const selected = FONT_IDS.find((id) => FONTS[id].stack === current) ?? "";
+
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+      <span className="sr-only">Typeface</span>
+      <select
+        value={selected}
+        onMouseDown={(event) => event.stopPropagation()}
+        onChange={(event) => {
+          const value = event.target.value;
+          if (!value) editor.chain().focus().unsetFontFamily().run();
+          else editor.chain().focus().setFontFamily(FONTS[value as keyof typeof FONTS].stack).run();
+        }}
+        aria-label="Typeface"
+        title="Typeface"
+        className="h-8 rounded-md border border-rule bg-surface px-2 text-xs text-ink transition-colors hover:border-rule-strong focus-visible:outline-2"
+      >
+        <option value="">Book’s own</option>
+        {FONT_IDS.map((id) => (
+          <option key={id} value={id}>
+            {FONTS[id].label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function EditorToolbar({ editor, extra }: { editor: Editor; extra?: ReactNode }) {
   // TipTap mutates its own state; React needs a nudge to re-read `isActive`.
   const [, forceUpdate] = useState(0);
 
@@ -118,6 +158,17 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
       >
         <UnderlineIcon className="h-4 w-4" aria-hidden="true" />
       </ToolbarButton>
+      <ToolbarButton
+        label="Strikethrough"
+        active={editor.isActive("strike")}
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+      >
+        <Strikethrough className="h-4 w-4" aria-hidden="true" />
+      </ToolbarButton>
+
+      <Separator />
+
+      <FontPicker editor={editor} />
 
       <Separator />
 
@@ -206,6 +257,8 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
       >
         <Redo2 className="h-4 w-4" aria-hidden="true" />
       </ToolbarButton>
+
+      {extra ? <div className="ml-auto flex items-center gap-1">{extra}</div> : null}
     </div>
   );
 }

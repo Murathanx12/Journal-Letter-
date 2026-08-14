@@ -61,17 +61,33 @@ date heading, like a page of a printed book.
 signature and a restrained accent colour. Their name and the date are shown
 automatically, whether or not they typed them.
 
-**Reading, calendar, search.** A continuous reading view with dates as chapter
-markers and an optional two-page spread; a calendar showing which days have
-writing; and full-text search across everything you are allowed to read.
+**A book with pages.** Reading and writing both happen on two facing pages with
+a fold down the middle. The pagination is real: the writing fills the left page,
+then the right, then the next spread — so while a letter is being written you
+can see where its pages will actually fall. Every entry opens on a fresh page, so
+one person's letter never runs into the next person's half way down. A phone
+shows one page at a time; a printout uses the paper's own pages. There is a
+plain single-column view for anyone who would rather scroll.
+
+**Calendar and search.** A calendar showing which days have writing, where
+picking any day — written on or not — shows it beside the calendar with a way to
+read it, add to it, or start it. Full-text search across everything you are
+allowed to read, which also reports how many times a word appears in the whole
+book, not just in the results on screen.
 
 **Photographs on the page.** Pictures are not attachments in a list — they are
-placed on the page. Drag one anywhere, resize and rotate it, cut it into a
-shape (circle, arch, heart, hexagon, star, torn-edge cut-out), and choose
-whether it sits **behind** the writing, **in front** of it, or **in** it with
-the text flowing around the cut-out silhouette. Everything works by touch, so a
-page can be arranged on a phone. Positions are stored as fractions of the column
-width, so a layout made on a phone looks the same on a laptop.
+stuck onto a page. Add one with **Ctrl/⌘ + P** or by simply pasting it. Drag it
+anywhere, drag it across the fold to move it to the next page, resize and rotate
+it, cut it into a shape (circle, arch, heart, hexagon, star, torn-edge cut-out),
+and choose whether it sits **behind** the writing, **in front** of it, or **in**
+it with the text flowing around the cut-out silhouette. Everything works by
+touch, so a page can be arranged on a phone. Positions are stored as fractions of
+a page, so a layout made on a phone looks the same on a laptop.
+
+**Copy for WhatsApp.** These letters started in a WhatsApp thread and often go
+back to one, so a letter can be copied in WhatsApp's own markup — `*bold*`,
+`_italic_`, `~struck through~` — and pasted straight into a chat with its
+emphasis intact.
 
 **Preservation.** Optional proofreading fixes obvious mistakes without touching
 slang, pet names, mixed languages or repeated letters — and never replaces the
@@ -115,8 +131,8 @@ src/
       google/               Docs export OAuth handshake
     auth/callback/          Turns a sign-in link into a session
   components/
-    book/                   Cover, day heading, entry block, rich-text renderer
-    editor/                 TipTap editor, toolbar, autosave, proofreading review
+    book/                   Cover, day heading, entry block, renderer, paged spread
+    editor/                 TipTap editor, toolbar, autosave, spelling, copy
     export/                 Export options and print preview
     members/ settings/ ui/  Invitations, forms, primitives
   lib/
@@ -524,6 +540,14 @@ npm run verify      # lint + typecheck + test + production build
   signatures, across all four page sizes.
 - **`security.test.ts`** — open-redirect protection, invitation token entropy
   and hash agreement with Postgres, and settings parsing against malformed data.
+- **`whatsapp.test.ts`** — copying a letter for WhatsApp: that the markers touch
+  the words they wrap (WhatsApp shows them literally otherwise), that adjacent
+  runs sharing a mark are merged, and that paragraphs keep their gaps.
+- **`placement.test.ts`** — reading a photograph's placement back out of jsonb: a
+  hand-edited or older row must render as a slightly odd page, never as a blank
+  one or a photograph a mile off the paper.
+- **`dictionary.test.ts`** — the offline spell checker, half of it asserting what
+  it *declines* to touch.
 
 The database authorization tests live in
 `supabase/tests/rls_authorization_test.sql` — see
@@ -596,6 +620,48 @@ trim size and a press-ready PDF, both of which come out of `ExportDocument` and
 
 ## Design decisions worth knowing
 
+**Pages are real, and the browser paginates them.** `src/components/book/book-pages.tsx`
+is a multi-column box with a definite height and `column-fill: auto`. When the
+writing no longer fits, the browser lays the rest out in further columns *beside*
+the visible ones and the box becomes horizontally scrollable; turning a page is a
+scroll of exactly one spread — `clientWidth + column-gap`. Three consequences
+shaped everything around it:
+
+- `column-fill: auto` is essential. The default, `balance`, would share a short
+  letter evenly across both pages instead of filling the left one first.
+- `break-before: column` starts an element on a fresh page, which is the whole
+  of how each entry gets its own opening page.
+- The columns box carries **no padding**. All the margins belong to the wrapper,
+  because padding would put that page-turn arithmetic out by a few pixels on
+  every single turn.
+
+`overflow: hidden` still makes it a scroll container, so page turns are driven
+entirely from the controls and a stray trackpad swipe can never leave you looking
+at half of one page and half of another. While writing, the browser scrolls the
+box just far enough to reveal the caret — which lands mid-spread — so the editor
+watches the caret and turns the page properly instead.
+
+**A page has a height, so a photograph can be half way down it.** This is the
+real payoff of paginating. In a continuously scrolling entry a page has no
+height — it depends on how much has been written — so a photograph could only be
+positioned against the column *width*, and anything placed low would move every
+time a sentence was added. A page in a book is a fixed rectangle.
+
+Stickers are therefore positioned in pure CSS, with no measurement anywhere:
+
+```css
+left: calc((100% + var(--page-gap)) * var(--page) + 100% * var(--x));
+top:  calc(var(--page-height) * var(--y));
+```
+
+`--page` steps across by one whole page — column plus gutter — from an anchor
+that sits at the top-left of the page an entry opens on. Because the anchor lives
+inside the same column flow as the writing, "page four of this letter" lands on
+page four whatever size the page turns out to be, and turning the page carries
+the photographs with it. Outside a paginated book — a side panel, a printout —
+there is no page four, so the same stickers fall back to joining the writing in
+the flow rather than being placed somewhere meaningless.
+
 **Dates are strings, not instants.** `YYYY-MM-DD` everywhere, with every
 conversion to `Date` pinned to UTC. The recurring bug in software like this is
 `new Date("2026-08-14")` parsed as UTC midnight and then formatted in a timezone
@@ -635,6 +701,12 @@ nothing about whether that book exists.
   and are placed and rendered on the page in the app, but the PDF and DOCX
   render text only. Embedding them requires fetching every signed URL during
   export; the document model already carries the structure for it.
+- **Printing places photographs in the flow, not on their page.** On screen a
+  photograph is stuck to a page of known size. Paper has its own pagination and
+  its own page size, so those coordinates mean nothing there — a picture put on
+  page four would print a page-width off the edge and vanish. Rather than drop
+  them, printing returns them to the writing they belong to, in order, at a
+  readable size.
 - **No freehand drawing.** Pictures can be placed, masked, rotated and layered,
   but there is no pen tool for drawing on a page.
 - **Text follows a photograph's outline, not a curve.** `shape-outside` makes
@@ -663,7 +735,8 @@ nothing about whether that book exists.
 **Next**
 
 - Bulk WhatsApp export parser with a review screen before import
-- Photographs embedded in PDF and DOCX exports
+- Photographs embedded in PDF and DOCX exports, and placed on their real page
+  when printing
 - Freehand drawing on a page, and text set along a curve
 - Supabase Realtime, so a shared book updates when the other person posts
 

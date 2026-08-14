@@ -20,6 +20,11 @@
 --   Supabase Studio -> SQL Editor -> paste and run, or:
 --     psql "$DATABASE_URL" -f supabase/tests/rls_authorization_test.sql
 --
+-- Run it WHOLE. The `begin`/`rollback` are what make it safe, and a tool that
+-- runs statements in its own transaction — or strips them — will commit two
+-- `@rlstest.invalid` users and their books into the database instead. If that
+-- happens, delete those two accounts and the books they own.
+--
 -- Every row of the final result must show passed = true.
 -- =============================================================================
 
@@ -97,6 +102,15 @@ insert into rls_results
 select 'B cannot read invitation tokens', count(*) = 0, 'rows=' || count(*)
 from public.book_invitations;
 
+-- Counting is reading. A function that answers "how many times does this word
+-- appear" would leak the contents of a private journal one guess at a time if
+-- it did not run under the caller's own permissions.
+insert into rls_results
+select 'B cannot count words in A private book',
+       coalesce(occurrences, 0) = 0 and coalesce(entries, 0) = 0,
+       'occurrences=' || coalesce(occurrences, 0) || ' entries=' || coalesce(entries, 0)
+from public.search_word_count('cccccccc-0000-4000-8000-000000000003', 'secret');
+
 -- Writes must be refused, not silently ignored.
 do $$
 begin
@@ -167,6 +181,20 @@ insert into rls_results
 select 'B still cannot read private book entries', count(*) = 0, 'rows=' || count(*)
 from public.entries where book_id = 'cccccccc-0000-4000-8000-000000000003';
 
+insert into rls_results
+select 'B CAN count words in the shared book',
+       coalesce(occurrences, 0) = 1,
+       'occurrences=' || coalesce(occurrences, 0)
+from public.search_word_count('ffffffff-0000-4000-8000-000000000006', 'letter');
+
+-- The sealed letter's text is withheld by policy, so it cannot be counted
+-- either — a word count must not become a way to read through the seal.
+insert into rls_results
+select 'A sealed letter is not counted',
+       coalesce(occurrences, 0) = 0,
+       'occurrences=' || coalesce(occurrences, 0)
+from public.search_word_count('ffffffff-0000-4000-8000-000000000006', 'anniversary');
+
 do $$
 declare affected int;
 begin
@@ -223,6 +251,16 @@ begin
   insert into rls_results values ('Anonymous cannot read books', n = 0, 'rows=' || n);
 exception when others then
   insert into rls_results values ('Anonymous cannot read books', true, 'refused: ' || sqlstate);
+end $$;
+
+do $$
+declare n bigint;
+begin
+  select occurrences into n
+  from public.search_word_count('ffffffff-0000-4000-8000-000000000006', 'letter');
+  insert into rls_results values ('Anonymous cannot count words', coalesce(n, 0) = 0, 'occurrences=' || coalesce(n, 0));
+exception when others then
+  insert into rls_results values ('Anonymous cannot count words', true, 'refused: ' || sqlstate);
 end $$;
 
 -- --- Report ------------------------------------------------------------------

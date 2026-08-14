@@ -108,6 +108,20 @@ export function getFont(value: string | null | undefined): FontDefinition {
   return value && isFontId(value) ? FONTS[value] : FONTS.literata;
 }
 
+/**
+ * The typeface a stretch of writing asked for, or null.
+ *
+ * Entries can carry a `textStyle` mark naming a font — a poem set in the
+ * handwriting face, say. That value comes out of a stored document, which in a
+ * shared book was written by somebody else, so it is matched against the six
+ * fonts this application actually offers rather than passed through to CSS. An
+ * unrecognised value renders in the book's own typeface instead.
+ */
+export function knownFontStack(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return FONT_IDS.some((id) => FONTS[id].stack === value) ? value : null;
+}
+
 // -----------------------------------------------------------------------------
 // Typography presets
 // -----------------------------------------------------------------------------

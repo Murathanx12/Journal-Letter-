@@ -1,7 +1,7 @@
 import { isMaskId, type MaskId } from "./masks";
 
 /**
- * How a photograph is placed on a page.
+ * How a photograph is stuck onto a page.
  *
  * Two modes, because they answer different wishes and are built on different
  * CSS:
@@ -12,11 +12,14 @@ import { isMaskId, type MaskId } from "./masks";
  *             around its outline. A float with `shape-outside`, which is the
  *             only way text can follow a cut-out shape.
  *
- * Positions are stored as fractions of the column width rather than pixels, so
- * a page arranged on a phone still looks right on a laptop and in an export.
- * The one exception is `y`, which is a fraction of the *width* too — using the
- * height would be meaningless, since an entry's height depends on how much has
- * been written.
+ * Everything is stored as a fraction rather than in pixels, so a page arranged
+ * on a phone still looks right on a laptop and in an export.
+ *
+ * `y` being a fraction of the page *height* is only possible because the book
+ * is paginated. In a continuously scrolling entry a page has no height — it
+ * depends on how much has been written — so a photograph half way down would
+ * move every time somebody added a sentence. A page in a book is a fixed
+ * rectangle, so half way down means half way down.
  */
 
 export type PlacementMode = "free" | "wrap";
@@ -32,11 +35,14 @@ export type PlacedMedia = {
 
   mode: PlacementMode;
 
-  /** `free` only. Fractions of the column width, from its top-left corner. */
+  /** Which page of this entry it is stuck to. 0 is the page the entry opens on. */
+  page: number;
+
+  /** `free` only. Fractions of the page, from its top-left corner. */
   x: number;
   y: number;
 
-  /** Width as a fraction of the column. Height follows from `aspect`. */
+  /** Width as a fraction of the page width. Height follows from `aspect`. */
   width: number;
   /** Intrinsic height ÷ width, so the picture is never squashed. */
   aspect: number;
@@ -54,8 +60,9 @@ export type PlacedMedia = {
 export const DEFAULT_PLACEMENT: Omit<PlacedMedia, "id" | "attachmentId" | "path"> = {
   alt: "",
   mode: "free",
-  x: 0.08,
-  y: 0.06,
+  page: 0,
+  x: 0.1,
+  y: 0.08,
   width: 0.42,
   aspect: 1,
   rotation: 0,
@@ -98,9 +105,10 @@ export function parseLayout(value: unknown): PlacedMedia[] {
       path: item.path,
       alt: typeof item.alt === "string" ? item.alt.slice(0, 300) : "",
       mode: item.mode === "wrap" ? "wrap" : "free",
-      // Allowed slightly outside the column so a picture can bleed off the edge.
+      page: Math.round(clamp(item.page, 0, 400, 0)),
+      // Allowed slightly outside the page so a picture can bleed off the edge.
       x: clamp(item.x, -0.5, 1.5, DEFAULT_PLACEMENT.x),
-      y: clamp(item.y, -0.5, 20, DEFAULT_PLACEMENT.y),
+      y: clamp(item.y, -0.5, 1.5, DEFAULT_PLACEMENT.y),
       width: clamp(item.width, 0.05, 1.6, DEFAULT_PLACEMENT.width),
       aspect: clamp(item.aspect, 0.05, 20, 1),
       rotation: clamp(item.rotation, -180, 180, 0),

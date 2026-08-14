@@ -217,19 +217,130 @@
   }
 
   /*
-   * Two-page spread. Below the breakpoint this collapses to one column — a
-   * phone should show a single readable page, not a shrunken spread.
+   * An open book: two facing pages with a fold down the middle.
+   *
+   * The chrome — border, paper, margins — belongs to the wrapper, and the
+   * columns belong to the box inside it. That split matters: the inner box must
+   * carry no padding of its own, because a page turn is a scroll of exactly
+   * `clientWidth + column-gap`, and padding would put that arithmetic out by a
+   * few pixels on every single turn.
    */
-  .book-spread {
+  .book-open {
+    position: relative;
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    padding: 2rem 1.5rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+
+  .book-open__leaves {
+    --page-gap: 3rem;
     column-count: 1;
+    column-gap: var(--page-gap);
+    /* `balance` — the default — would share a short letter evenly between the
+       two pages instead of filling the left one first, which is not how a book
+       works and looks wrong the moment there is only a paragraph. */
+    column-fill: auto;
+    /* Still a scroll container, so the pages that do not fit are laid out
+       beside these ones; hidden because page turns are driven from the
+       controls, never by a stray swipe landing between two spreads. */
+    overflow: hidden;
+  }
+
+  /* A phone shows one page at a time: a shrunken spread is unreadable. */
+  @media (min-width: 1024px) {
+    .book-open {
+      padding: 2.75rem 3rem;
+    }
+
+    .book-open__leaves {
+      --page-gap: 4.5rem;
+      column-count: 2;
+    }
+  }
+
+  /*
+   * A photograph stuck to a page.
+   *
+   * Positioned entirely in CSS, against an anchor that sits at the top-left of
+   * the page an entry opens on. `--page` steps across by one whole page —
+   * column plus gutter — which is why a sticker can be put on page four of a
+   * letter without anything having to measure where page four ended up.
+   *
+   * This is the payoff of paginating: a page has a *height*, so a photograph can
+   * be placed a third of the way down and stay there. In a continuously
+   * scrolling entry there is no such thing — the height depends on how much has
+   * been written — and every coordinate had to be a fraction of the width.
+   */
+  /*
+   * Outside a paginated book there are no pages to be stuck to — a single entry
+   * shown in a side panel, or a printout, has no page four. Rather than place a
+   * photograph somewhere meaningless, the default is to let it join the writing
+   * at the size it was given. The positioning below only applies inside a book.
+   */
+  .page-anchor {
+    position: relative;
+  }
+
+  .page-sticker {
+    display: block;
+    width: calc(100% * var(--w, 0.4));
+    /* Width ÷ height, so the picture keeps its proportions without anyone
+       having to know how wide a page turned out to be. */
+    aspect-ratio: var(--ar, 1);
+    margin-block: 1em;
+  }
+
+  .book-open__leaves .page-anchor {
+    height: 0;
+  }
+
+  .book-open__leaves .page-sticker {
+    position: absolute;
+    left: calc((100% + var(--page-gap, 0px)) * var(--page, 0) + 100% * var(--x, 0));
+    top: calc(var(--page-height, 40rem) * var(--y, 0));
+    margin-block: 0;
+  }
+
+  /* Inside a page, the page *is* the measure — the usual cap would leave half
+     of every column empty. */
+  .book-open__leaves .book-prose {
+    max-width: none;
+  }
+
+  .book-open__leaves .tiptap {
+    min-height: 0;
+  }
+
+  .book-open__spine {
+    display: none;
   }
 
   @media (min-width: 1024px) {
-    .book-spread[data-spread="true"] {
-      column-count: 2;
-      column-gap: 4rem;
-      column-rule: 1px solid var(--color-rule);
+    .book-open__spine {
+      display: block;
+      position: absolute;
+      top: 1.25rem;
+      bottom: 1.25rem;
+      left: 50%;
+      width: 3rem;
+      transform: translateX(-50%);
+      pointer-events: none;
+      background: linear-gradient(
+        to right,
+        transparent 0%,
+        color-mix(in srgb, var(--color-ink) 5%, transparent) 42%,
+        color-mix(in srgb, var(--color-ink) 9%, transparent) 50%,
+        color-mix(in srgb, var(--color-ink) 5%, transparent) 58%,
+        transparent 100%
+      );
     }
+  }
+
+  /* Starts an entry on a fresh page rather than part-way down someone else's. */
+  .book-page-start {
+    break-before: column;
   }
 }
 
@@ -246,5 +357,50 @@
 
   .book-prose {
     max-width: none;
+  }
+
+  /* Paper has real pages, so the on-screen pagination is dropped in favour of
+     the printer's own — but a new entry still starts on a new sheet. */
+  .book-open {
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .book-open__leaves {
+    /* The height is set inline, because it is also what a sticker's vertical
+       position is measured against — so unsetting it here has to be forceful. */
+    height: auto !important;
+    column-count: 1;
+    overflow: visible;
+  }
+
+  .book-open__spine {
+    display: none;
+  }
+
+  .book-page-start {
+    break-before: page;
+  }
+
+  /*
+   * Photographs, on paper.
+   *
+   * On screen a sticker is placed against a page of known size. Paper has its
+   * own pagination and its own page size, so those coordinates mean nothing
+   * here — a photograph put on page four would print a page-width to the right
+   * of the paper and simply vanish. Rather than drop them, they are returned to
+   * the flow: printed at a readable size, in order, among the writing they
+   * belong to.
+   */
+  .book-open__leaves .page-anchor {
+    height: auto;
+  }
+
+  .book-open__leaves .page-sticker {
+    position: static;
+    transform: none;
+    margin-block: 1em;
+    break-inside: avoid;
   }
 }

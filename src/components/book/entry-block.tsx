@@ -3,11 +3,10 @@ import Link from "next/link";
 
 import { AuthorMark } from "@/components/book/author-mark";
 import { EntryContent } from "@/components/book/entry-content";
-import { MediaLayer, WrappedMedia } from "@/components/media/media-layer";
+import { EntryMedia } from "@/components/media/media-layer";
 import type { BookMember } from "@/lib/books/queries";
 import type { CompiledEntry } from "@/lib/entries/compile";
 import type { ResolvedDesign } from "@/lib/design/theme";
-import { splitByLayer } from "@/lib/media/placement";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -39,8 +38,6 @@ export function EntryBlock({
   className?: string;
 }) {
   const urls = mediaUrls ?? new Map<string, string>();
-  const { behind, front, wrapped } = splitByLayer(entry.layout);
-  const hasMedia = entry.layout.length > 0;
 
   return (
     <article className={cn("group", className)} id={`entry-${entry.id}`}>
@@ -55,18 +52,20 @@ export function EntryBlock({
           <span className="text-sm text-ink-muted">A writer</span>
         )}
 
+        {/*
+          Always visible, never revealed on hover. There is no hover on a phone,
+          which is where most of this is written — an edit link that only appears
+          under a mouse pointer may as well not exist.
+        */}
         {showActions ? (
-          <div className="flex items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <div className="no-print flex items-center gap-2">
             {isFavorite ? (
-              <Star
-                className="h-3.5 w-3.5 fill-current text-brand opacity-100"
-                aria-label="A favourite"
-              />
+              <Star className="h-3.5 w-3.5 fill-current text-brand" aria-label="A favourite" />
             ) : null}
             {canEdit ? (
               <Link
                 href={`/books/${bookId}/entries/${entry.id}`}
-                className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink"
+                className="inline-flex items-center gap-1 rounded-full border border-rule px-2.5 py-1 text-xs text-ink-muted transition-colors hover:border-rule-strong hover:text-ink"
               >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
                 Edit
@@ -85,41 +84,20 @@ export function EntryBlock({
         </h3>
       ) : null}
 
-      {/*
-        The page.
-
-        `container-type: inline-size` is what lets every placed photograph be
-        positioned in fractions of the column width — including vertically.
-        Without it a page arranged today would rearrange itself as soon as
-        somebody wrote another sentence.
-      */}
-      <div className={cn(hasMedia && "relative [container-type:inline-size]")}>
-        {hasMedia ? <MediaLayer items={behind} urls={urls} className="z-0" /> : null}
-
-        <div
-          className={cn("book-prose", hasMedia && "relative z-10")}
-          data-indent={design.preset.indentParagraphs ? "true" : "false"}
-          // Each writer's own typeface, when the book asks for it. Size and
-          // leading stay the book's, so the page still looks like one book.
-          style={
-            design.perAuthorFonts && author
-              ? { fontFamily: `var(--author-font-${author.userId}, var(--book-body-font))` }
-              : undefined
-          }
-        >
-          {/*
-            Floats come first so the text that follows flows around them. Their
-            `shape-outside` matches the cut-out, so the writing hugs the
-            silhouette rather than a box.
-          */}
-          {wrapped.map((item) => (
-            <WrappedMedia key={item.id} item={item} url={urls.get(item.path)} />
-          ))}
-
+      <div
+        className="book-prose"
+        data-indent={design.preset.indentParagraphs ? "true" : "false"}
+        // Each writer's own typeface, when the book asks for it. Size and
+        // leading stay the book's, so the page still looks like one book.
+        style={
+          design.perAuthorFonts && author
+            ? { fontFamily: `var(--author-font-${author.userId}, var(--book-body-font))` }
+            : undefined
+        }
+      >
+        <EntryMedia items={entry.layout} urls={urls}>
           <EntryContent content={entry.content} />
-        </div>
-
-        {hasMedia ? <MediaLayer items={front} urls={urls} className="z-20" /> : null}
+        </EntryMedia>
       </div>
 
       {entry.correctionState !== "original" ? (
@@ -151,12 +129,19 @@ export function EntryBlock({
 export function SealedEntryBlock({
   author,
   opensOn,
+  className,
 }: {
   author: BookMember | undefined;
   opensOn: string;
+  className?: string;
 }) {
   return (
-    <article className="rounded-card border border-dashed border-rule-strong px-5 py-6 text-center">
+    <article
+      className={cn(
+        "rounded-card border border-dashed border-rule-strong px-5 py-6 text-center",
+        className,
+      )}
+    >
       <Lock className="mx-auto h-4 w-4 text-ink-muted" aria-hidden="true" />
       <p className="mt-2 text-sm text-ink-soft">
         A sealed letter from {author?.displayName ?? "a writer"}

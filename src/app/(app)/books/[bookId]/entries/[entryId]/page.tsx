@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { BookPages } from "@/components/book/book-pages";
 import { BookSurface } from "@/components/book/book-surface";
 import { DayHeading } from "@/components/book/day-heading";
 import { EntryBlock } from "@/components/book/entry-block";
@@ -13,6 +14,7 @@ import {
   getFavorites,
   signEntryMedia,
 } from "@/lib/entries/queries";
+import { PAGE_HEIGHT } from "@/lib/design/pages";
 import { asRichTextDoc } from "@/lib/text/rich-text";
 
 export default async function EntryPage({
@@ -49,7 +51,7 @@ export default async function EntryPage({
     }
 
     return (
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6">
         {entry.hasOriginal ? (
           <RevertToOriginal
             bookId={bookId}
@@ -81,18 +83,24 @@ export default async function EntryPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <BookSurface design={book.resolvedDesign} members={members} className="space-y-8">
-        <DayHeading date={entry.entryDate} preset={book.resolvedDesign.preset} />
-        <EntryBlock
-          entry={entry}
-          author={author}
-          design={book.resolvedDesign}
-          bookId={bookId}
-          canEdit={false}
-          isFavorite={favorites.has(entry.id)}
-          mediaUrls={await signEntryMedia([entry])}
-        />
+    <div className="mx-auto max-w-5xl">
+      <BookSurface design={book.resolvedDesign} members={members}>
+        <BookPages pageHeight={PAGE_HEIGHT} label="This entry, page by page">
+          <DayHeading
+            date={entry.entryDate}
+            preset={book.resolvedDesign.preset}
+            className="mb-7"
+          />
+          <EntryBlock
+            entry={entry}
+            author={author}
+            design={book.resolvedDesign}
+            bookId={bookId}
+            canEdit={false}
+            isFavorite={favorites.has(entry.id)}
+            mediaUrls={await signEntryMedia([entry])}
+          />
+        </BookPages>
       </BookSurface>
     </div>
   );

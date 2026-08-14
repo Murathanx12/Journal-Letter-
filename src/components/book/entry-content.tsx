@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 
+import { knownFontStack } from "@/lib/design/theme";
 import { asRichTextDoc, type Mark, type RichTextNode } from "@/lib/text/rich-text";
 
 /**
@@ -47,6 +48,18 @@ function applyMarks(text: string, marks: Mark[] | undefined, keyPrefix: string):
             {child}
           </code>
         );
+      case "textStyle": {
+        // A typeface chosen for this stretch of writing. Validated against the
+        // fonts this application offers rather than handed straight to CSS.
+        const fontFamily = knownFontStack(mark.attrs?.fontFamily);
+        if (!fontFamily) return child;
+        return (
+          <span key={key} style={{ fontFamily }}>
+            {child}
+          </span>
+        );
+      }
+
       case "link": {
         const href = safeHref(mark.attrs?.href);
         if (!href) return child;

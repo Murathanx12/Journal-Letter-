@@ -17,13 +17,23 @@ test.describe("public pages", () => {
     await expect(page.getByRole("link", { name: /start writing|start your first book/i }).first()).toBeVisible();
   });
 
-  test("sign in offers both Google and email", async ({ page }) => {
+  test("sign in asks for an email and a password", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(page.getByRole("button", { name: /continue with google/i })).toBeVisible();
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("button", { name: /^sign in$/i })).toBeVisible();
+  });
+
+  test("Google is offered only when it has actually been set up", async ({ page }) => {
+    await page.goto("/login");
+
+    // A button that can only answer `provider is not enabled` is worse than no
+    // button, so it is hidden until `GOOGLE_AUTH_ENABLED` says otherwise. This
+    // asserts the flag is obeyed either way rather than pinning one value.
+    const google = page.getByRole("button", { name: /continue with google/i });
+    const enabled = process.env.GOOGLE_AUTH_ENABLED === "true";
+    await expect(google).toHaveCount(enabled ? 1 : 0);
   });
 
   test("sign up asks what to call you", async ({ page }) => {

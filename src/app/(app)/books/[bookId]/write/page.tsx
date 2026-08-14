@@ -20,7 +20,7 @@ export default async function WritePage({
   const startDate = date && isCalendarDate(date) ? date : book.today;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-5xl">
       <EntryComposer
         bookId={book.id}
         bookToday={startDate}

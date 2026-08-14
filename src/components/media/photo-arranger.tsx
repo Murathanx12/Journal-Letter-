@@ -2,19 +2,26 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { BookPages } from "@/components/book/book-pages";
 import { EntryContent } from "@/components/book/entry-content";
+import { stickerStyle } from "@/components/media/media-layer";
+import { PAGE_HEIGHT } from "@/lib/design/pages";
 import { getMask } from "@/lib/media/masks";
 import { splitByLayer, type PlacedMedia } from "@/lib/media/placement";
 import type { RichTextDoc } from "@/lib/text/rich-text";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * Arranging photographs on a page.
+ * Arranging photographs on the pages of the book.
  *
  * This is a separate mode from writing, deliberately. Dragging a picture and
- * selecting text are the same gesture, and putting drag handles on top of a
- * live text editor makes both worse. Here the writing is shown but inert, so a
- * drag always means "move the photo".
+ * selecting text are the same gesture, and putting drag handles on top of a live
+ * text editor makes both worse. Here the writing is shown but inert, so a drag
+ * always means "move the photo".
+ *
+ * The pages are the real ones — the same component, the same height, the same
+ * pagination — so a photograph put a third of the way down page two is a third
+ * of the way down page two when the letter is read and when it is printed.
  *
  * All pointer handling goes through Pointer Events with `touch-action: none`,
  * which gives mouse, trackpad, pen and touch the same code path — arranging a
@@ -22,18 +29,36 @@ import { cn } from "@/lib/utils/cn";
  */
 
 type Interaction =
-  | { kind: "move"; id: string; startX: number; startY: number; originX: number; originY: number }
   | {
-      kind: "resize";
+      kind: "move";
       id: string;
       startX: number;
       startY: number;
-      originWidth: number;
-      rotation: number;
+      originPage: number;
+      originX: number;
+      originY: number;
     }
-  | { kind: "rotate"; id: string; centreX: number; centreY: number; startAngle: number; originRotation: number };
+  | { kind: "resize"; id: string; startX: number; startY: number; originWidth: number; rotation: number }
+  | {
+      kind: "rotate";
+      id: string;
+      centreX: number;
+      centreY: number;
+      startAngle: number;
+      originRotation: number;
+    };
 
 const DEGREES = 180 / Math.PI;
+
+/**
+ * The measured page box, taken from the pages themselves.
+ *
+ * Two invisible markers are laid out by exactly the same CSS as the stickers,
+ * one on page 0 and one on page 1. Their boxes give the width and height of a
+ * page and the distance between two of them, without this component having to
+ * know anything about columns, gutters or how far the book has been scrolled.
+ */
+type PageBox = { left: number; top: number; width: number; height: number; pitch: number };
 
 export function PhotoArranger({
   content,
@@ -52,7 +77,8 @@ export function PhotoArranger({
   onChange: (items: PlacedMedia[]) => void;
   indentParagraphs: boolean;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const probeFirst = useRef<HTMLSpanElement>(null);
+  const probeSecond = useRef<HTMLSpanElement>(null);
   const interaction = useRef<Interaction | null>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -65,13 +91,22 @@ export function PhotoArranger({
     [items, onChange],
   );
 
-  const containerWidth = () => containerRef.current?.clientWidth ?? 1;
+  const measure = useCallback((): PageBox | null => {
+    const first = probeFirst.current?.getBoundingClientRect();
+    const second = probeSecond.current?.getBoundingClientRect();
+    if (!first || !second || first.width === 0) return null;
+    return {
+      left: first.left,
+      top: first.top,
+      width: first.width,
+      height: first.height,
+      // On a phone this is one page plus one gutter; on a laptop it is the same,
+      // because pages sit side by side at a constant pitch either way.
+      pitch: second.left - first.left,
+    };
+  }, []);
 
-  function onPointerDown(
-    event: React.PointerEvent,
-    item: PlacedMedia,
-    kind: "move" | "resize" | "rotate",
-  ) {
+  function onPointerDown(event: React.PointerEvent, item: PlacedMedia, kind: Interaction["kind"]) {
     event.preventDefault();
     event.stopPropagation();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -84,6 +119,7 @@ export function PhotoArranger({
         id: item.id,
         startX: event.clientX,
         startY: event.clientY,
+        originPage: item.page,
         originX: item.x,
         originY: item.y,
       };
@@ -123,14 +159,21 @@ export function PhotoArranger({
     const active = interaction.current;
     if (!active) return;
 
-    const width = containerWidth();
+    const box = measure();
+    if (!box) return;
 
     if (active.kind === "move") {
-      // `left`/`top` are applied before the rotation transform and rotation is
-      // about the centre, so a screen-space delta maps straight through.
+      // Work in one long strip of pages, then split back into "which page" and
+      // "where on it" — which is what lets a photograph be dragged across the
+      // fold onto the next page and simply belong to that page instead.
+      const along =
+        active.originPage * box.pitch + active.originX * box.width + (event.clientX - active.startX);
+      const page = Math.max(0, Math.floor(along / box.pitch));
+
       update(active.id, {
-        x: active.originX + (event.clientX - active.startX) / width,
-        y: active.originY + (event.clientY - active.startY) / width,
+        page,
+        x: (along - page * box.pitch) / box.width,
+        y: active.originY + (event.clientY - active.startY) / box.height,
       });
       return;
     }
@@ -144,7 +187,7 @@ export function PhotoArranger({
       const along = dx * Math.cos(radians) + dy * Math.sin(radians);
 
       update(active.id, {
-        width: Math.min(1.6, Math.max(0.05, active.originWidth + along / width)),
+        width: Math.min(1.6, Math.max(0.05, active.originWidth + along / box.width)),
       });
       return;
     }
@@ -202,26 +245,21 @@ export function PhotoArranger({
     const selected = item.id === selectedId;
     const mask = getMask(item.mask);
 
+    // The frame carries the position and the rotation; the picture inside it
+    // carries the cut-out, so the mask never clips the handles.
+    const { clipPath: _clip, opacity: _opacity, ...frame } = stickerStyle(item);
+
     return (
       <div
         key={item.id}
         data-placed-item
-        className="pointer-events-auto absolute"
-        style={{
-          left: `${item.x * 100}cqw`,
-          top: `${item.y * 100}cqw`,
-          width: `${item.width * 100}cqw`,
-          height: `${item.width * item.aspect * 100}cqw`,
-          transform: `rotate(${item.rotation}deg)`,
-          touchAction: "none",
-        }}
+        className="page-sticker pointer-events-auto"
+        style={{ ...frame, touchAction: "none" }}
       >
-        {/* The picture itself, clipped. Handles live outside this so the mask
-            never cuts them off. */}
         <div
           role="button"
           tabIndex={0}
-          aria-label={`Photograph${item.alt ? `: ${item.alt}` : ""}. Drag to move, arrow keys to nudge.`}
+          aria-label={`Photograph${item.alt ? `: ${item.alt}` : ""} on page ${item.page + 1}. Drag to move, arrow keys to nudge.`}
           onPointerDown={(event) => onPointerDown(event, item, "move")}
           onPointerMove={onPointerMove}
           onPointerUp={endInteraction}
@@ -241,12 +279,7 @@ export function PhotoArranger({
         >
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={url}
-              alt=""
-              className="h-full w-full object-cover"
-              draggable={false}
-            />
+            <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-surface-sunk text-xs text-ink-muted">
               Image unavailable
@@ -303,21 +336,26 @@ export function PhotoArranger({
   }
 
   return (
-    <div
-      ref={containerRef}
-      onPointerDown={() => onSelect(null)}
-      className={cn(
-        "relative overflow-hidden rounded-card border border-rule bg-surface px-5 py-6 [container-type:inline-size] sm:px-8 sm:py-7",
-        dragging && "select-none",
-      )}
-    >
-      <div className="pointer-events-none absolute inset-0 z-0">{behind.map(renderItem)}</div>
-
-      {/* The writing, shown for reference but inert in this mode. */}
-      <div
-        className="book-prose pointer-events-none relative z-10"
-        data-indent={indentParagraphs ? "true" : "false"}
+    <div onPointerDown={() => onSelect(null)}>
+      <BookPages
+        pageHeight={PAGE_HEIGHT}
+        label="Pages, for arranging photographs"
+        className={cn(dragging && "select-none")}
       >
+        <div className="page-anchor">
+          {/* The rulers. Invisible, but laid out by exactly the same CSS as the
+              stickers — so measuring them measures a page. */}
+          <span ref={probeFirst} aria-hidden="true" style={probeStyle(0)} />
+          <span ref={probeSecond} aria-hidden="true" style={probeStyle(1)} />
+
+          {behind.map(renderItem)}
+        </div>
+
+        {/* The writing, shown for reference but inert in this mode. */}
+        <div
+          className="book-prose pointer-events-none"
+          data-indent={indentParagraphs ? "true" : "false"}
+        >
         {wrapped.map((item) => {
           const url = urls.get(item.path);
           const mask = getMask(item.mask);
@@ -327,8 +365,8 @@ export function PhotoArranger({
               className="pointer-events-auto"
               style={{
                 float: item.side,
-                width: `${item.width * 100}cqw`,
-                height: `${item.width * item.aspect * 100}cqw`,
+                width: `${item.width * 100}%`,
+                aspectRatio: 1 / (item.aspect || 1),
                 shapeOutside: mask.shapeOutside === "none" ? undefined : mask.shapeOutside,
                 shapeMargin: "0.9em",
                 marginLeft: item.side === "right" ? "1.2em" : 0,
@@ -358,10 +396,32 @@ export function PhotoArranger({
           );
         })}
 
-        <EntryContent content={content} />
-      </div>
+          <EntryContent content={content} />
+        </div>
 
-      <div className="pointer-events-none absolute inset-0 z-20">{front.map(renderItem)}</div>
+        <div className="page-anchor">{front.map(renderItem)}</div>
+      </BookPages>
     </div>
   );
+}
+
+/**
+ * A full-page, zero-content marker. `aspect-ratio` is switched off and the
+ * height taken straight from the page, so the box it reports is the page.
+ */
+function probeStyle(page: number): React.CSSProperties {
+  return {
+    "--page": page,
+    "--x": 0,
+    "--y": 0,
+    "--w": 1,
+    visibility: "hidden",
+    pointerEvents: "none",
+    aspectRatio: "auto",
+    height: "var(--page-height)",
+    position: "absolute",
+    left: "calc((100% + var(--page-gap, 0px)) * var(--page))",
+    top: 0,
+    width: "100%",
+  } as React.CSSProperties;
 }

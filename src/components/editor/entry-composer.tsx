@@ -1,15 +1,18 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
-import { AlertTriangle, Check, CloudOff, Loader2, Lock, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, CloudOff, ImagePlus, Loader2, Lock, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
+import { CopyButton } from "@/components/editor/copy-button";
 import { SpellingBar } from "@/components/editor/spelling-bar";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { PageStickers } from "@/components/media/media-layer";
 import { PhotoArranger } from "@/components/media/photo-arranger";
 import { PhotoPanel } from "@/components/media/photo-panel";
-import type { PlacedMedia } from "@/lib/media/placement";
+import { splitByLayer, type PlacedMedia } from "@/lib/media/placement";
+import { useMediaUpload } from "@/lib/media/use-upload";
 import {
   localDraftKey,
   readLocalDraft,
@@ -84,6 +87,7 @@ export function EntryComposer({
   const [mediaUrls, setMediaUrls] = useState<Map<string, string>>(
     () => new Map(Object.entries(initialMediaUrls ?? {})),
   );
+  const photoInput = useRef<HTMLInputElement>(null);
 
   // A counter rather than a boolean, so "has this exact text been saved?" is a
   // comparison instead of a flag somebody has to remember to reset.
@@ -140,6 +144,82 @@ export function EntryComposer({
     editorRef.current?.commands.clearSpellingSuggestions();
     setSuggestionCount(0);
   }, []);
+
+  const { upload, uploading, error: uploadError } = useMediaUpload({
+    bookId,
+    entryId: autosave.entryId,
+  });
+
+  /**
+   * A picture arriving by Ctrl/⌘ + P, by paste or by drop.
+   *
+   * It lands on the page and stays selected, so the Photos tab opens with the
+   * right picture already in hand — but the writer is left where they were,
+   * mid-sentence, rather than being thrown into another mode.
+   */
+  const addPhotos = useCallback(
+    async (files: readonly File[]) => {
+      if (files.length === 0) return;
+      const { placed, urls } = await upload(files);
+      if (urls.length > 0) {
+        setMediaUrls((current) => {
+          const next = new Map(current);
+          for (const [path, url] of urls) next.set(path, url);
+          return next;
+        });
+      }
+      if (placed.length > 0) {
+        setLayout((current) => [...current, ...placed]);
+        setSelectedMediaId(placed.at(-1)!.id);
+        touch();
+      }
+    },
+    [upload, touch],
+  );
+
+  const stickers = useMemo(() => splitByLayer(layout), [layout]);
+
+  /**
+   * The two ways a picture gets onto the page, bound to the whole screen rather
+   * than to the editor.
+   *
+   * Bound to the editor they would only work while the caret happened to be in
+   * the text — press Ctrl/⌘ + P a moment after clicking a toolbar control and
+   * nothing would happen, or worse, the browser's print dialogue would open.
+   *
+   * Ctrl/⌘ + P does cost the print dialogue *on this screen*. Printing a letter
+   * from the middle of writing it is not something anybody does, and the reading
+   * view — which is the one worth printing — still prints normally.
+   */
+  useEffect(() => {
+    if (tab !== "write") return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "p") return;
+      event.preventDefault();
+      photoInput.current?.click();
+    }
+
+    function onPaste(event: ClipboardEvent) {
+      // The editor handles a paste that lands in the text and marks it handled;
+      // this only catches the ones that would otherwise go nowhere.
+      if (event.defaultPrevented) return;
+      const files = Array.from(event.clipboardData?.files ?? []).filter((file) =>
+        file.type.startsWith("image/"),
+      );
+      if (files.length === 0) return;
+      event.preventDefault();
+      void addPhotos(files);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("paste", onPaste);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("paste", onPaste);
+    };
+  }, [tab, addPhotos]);
 
   /**
    * A highlight was clicked and the fix applied.
@@ -330,7 +410,68 @@ export function EntryComposer({
           onChange={handleChange}
           onEditorReady={handleEditorReady}
           onSuggestionApplied={handleSuggestionApplied}
+          onPasteFiles={(files) => void addPhotos(files)}
+          toolbarExtra={
+            <>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => photoInput.current?.click()}
+                disabled={uploading}
+                title="Put a picture on the page (Ctrl/⌘ + P, or just paste one)"
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink disabled:opacity-40"
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                {uploading ? "Adding…" : "Picture"}
+              </button>
+
+              <CopyButton
+                doc={content}
+                title={title}
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
+              />
+            </>
+          }
+          footer={
+            layout.length > 0 ? (
+              <span>
+                {layout.length} {layout.length === 1 ? "photograph" : "photographs"} on these pages
+              </span>
+            ) : null
+          }
+          stickers={
+            layout.length > 0 ? (
+              <>
+                <PageStickers items={stickers.behind} urls={mediaUrls} className="z-0" />
+                <PageStickers items={stickers.front} urls={mediaUrls} className="z-20" />
+              </>
+            ) : null
+          }
         />
+
+        {/*
+          One hidden input, opened by the toolbar button and by Ctrl/⌘ + P. It
+          lives outside the editor so that opening the file picker never moves
+          the caret.
+        */}
+        <input
+          ref={photoInput}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/heic"
+          multiple
+          className="sr-only"
+          onChange={(event) => {
+            const files = event.target.files ? Array.from(event.target.files) : [];
+            event.target.value = "";
+            void addPhotos(files);
+          }}
+        />
+
+        {uploadError ? <FormError>{uploadError}</FormError> : null}
       </div>
 
       {tab === "photos" ? (

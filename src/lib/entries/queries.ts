@@ -376,6 +376,42 @@ export async function searchEntries(
   }));
 }
 
+export type WordCount = { occurrences: number; entries: number };
+
+/**
+ * How often a term appears across a whole book, not just in the results shown.
+ *
+ * Search answers "which letters mention the ferry"; this answers "how often does
+ * the ferry come up", which is a different question and the more interesting one
+ * once a book covers years. Counted in Postgres over every matching entry rather
+ * than over the capped result list, so the number does not quietly stop at 100.
+ *
+ * Whole words only, so "ferry" is not also counted inside "ferryman".
+ */
+export async function countWordOccurrences(
+  term: string,
+  filters: SearchFilters = {},
+): Promise<WordCount | null> {
+  const trimmed = term.trim();
+  if (!trimmed || !filters.bookId) return null;
+
+  const supabase = await createClient();
+
+  const { data } = await supabase.rpc("search_word_count", {
+    p_book_id: filters.bookId,
+    p_term: trimmed,
+    p_author: filters.authorId ?? undefined,
+    p_from: filters.from ?? undefined,
+    p_to: filters.to ?? undefined,
+    p_tag: filters.tag ?? undefined,
+  });
+
+  const row = data?.[0];
+  if (!row) return null;
+
+  return { occurrences: Number(row.occurrences), entries: Number(row.entries) };
+}
+
 /** A short excerpt centred on the first match, so results show *why* they matched. */
 export function buildSnippet(text: string, term: string, radius = 90): string {
   const clean = text.replace(/\s+/g, " ").trim();

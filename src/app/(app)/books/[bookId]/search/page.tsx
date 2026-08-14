@@ -6,7 +6,7 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/surface";
 import { getBook, getBookMembers } from "@/lib/books/queries";
 import { formatLongDate, isCalendarDate, type CalendarDate } from "@/lib/date/calendar-date";
-import { searchEntries } from "@/lib/entries/queries";
+import { countWordOccurrences, searchEntries } from "@/lib/entries/queries";
 
 /**
  * Search inside one book.
@@ -35,9 +35,14 @@ export default async function SearchPage({
   const tag = query.tag?.trim() || undefined;
 
   const hasQuery = Boolean(term || authorId || from || to || tag);
-  const results = hasQuery
-    ? await searchEntries(term, { bookId, authorId, from, to, tag }, 100)
-    : [];
+  const filters = { bookId, authorId, from, to, tag };
+
+  const [results, wordCount] = hasQuery
+    ? await Promise.all([
+        searchEntries(term, filters, 100),
+        countWordOccurrences(term, filters),
+      ])
+    : [[], null];
 
   return (
     <div className="space-y-8">
@@ -100,11 +105,33 @@ export default async function SearchPage({
           />
         ) : (
           <section className="space-y-1">
-            <p className="text-sm text-ink-muted" aria-live="polite">
-              {results.length === 100
-                ? "Showing the first 100 matches"
-                : `${results.length} ${results.length === 1 ? "match" : "matches"}`}
-            </p>
+            <div className="space-y-1 pb-2" aria-live="polite">
+              {/*
+                Two different numbers, because they answer two different
+                questions: how many letters mention it, and how often it is said
+                at all. The second is counted across the whole book rather than
+                across the results below, which stop at 100.
+              */}
+              {wordCount && wordCount.occurrences > 0 ? (
+                <p className="text-sm text-ink">
+                  <span className="font-medium">
+                    “{term}” appears {wordCount.occurrences.toLocaleString()}{" "}
+                    {wordCount.occurrences === 1 ? "time" : "times"}
+                  </span>
+                  <span className="text-ink-muted">
+                    {" "}
+                    in {wordCount.entries.toLocaleString()}{" "}
+                    {wordCount.entries === 1 ? "entry" : "entries"}
+                  </span>
+                </p>
+              ) : null}
+
+              <p className="text-sm text-ink-muted">
+                {results.length === 100
+                  ? "Showing the first 100 matches"
+                  : `${results.length} ${results.length === 1 ? "match" : "matches"}`}
+              </p>
+            </div>
 
             <ul className="divide-y divide-rule">
               {results.map((hit) => (

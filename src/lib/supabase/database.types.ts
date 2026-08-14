@@ -548,6 +548,7 @@ export type Database = {
           title: string
         }[]
       }
+      regexp_quote: { Args: { p_value: string }; Returns: string }
       sealed_entry_previews: {
         Args: { p_book_id: string }
         Returns: {
@@ -555,6 +556,20 @@ export type Database = {
           entry_date: string
           id: string
           sealed_until: string
+        }[]
+      }
+      search_word_count: {
+        Args: {
+          p_author?: string
+          p_book_id: string
+          p_from?: string
+          p_tag?: string
+          p_term: string
+          p_to?: string
+        }
+        Returns: {
+          entries: number
+          occurrences: number
         }[]
       }
       shares_book_with: { Args: { p_user_id: string }; Returns: boolean }

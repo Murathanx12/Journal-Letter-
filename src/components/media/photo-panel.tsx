@@ -1,42 +1,17 @@
 "use client";
 
 import { FlipHorizontal2, ImagePlus, Loader2, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { Card } from "@/components/ui/surface";
 import { MASKS, MASK_IDS, type MaskId } from "@/lib/media/masks";
 import { DEFAULT_PLACEMENT, type PlacedMedia } from "@/lib/media/placement";
+import { useMediaUpload } from "@/lib/media/use-upload";
 import { cn } from "@/lib/utils/cn";
 
-/**
- * Adding photographs, and adjusting the one that is selected.
- *
- * Image dimensions are read in the browser before upload and sent along, so the
- * server never has to decode the file to learn its aspect ratio — and a picture
- * is never rendered squashed while it waits for that to be worked out.
- */
-
-async function readImageSize(file: File): Promise<{ width: number; height: number } | null> {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("decode failed"));
-      image.src = url;
-    });
-    return { width: image.naturalWidth, height: image.naturalHeight };
-  } catch {
-    // HEIC and some exotic formats will not decode in every browser. The upload
-    // still works; the picture just starts square until it is resized.
-    return null;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
+/** Adding photographs, and adjusting the one that is selected. */
 export function PhotoPanel({
   bookId,
   entryId,
@@ -56,8 +31,7 @@ export function PhotoPanel({
   onAddUrl: (path: string, url: string) => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { upload, uploading, error } = useMediaUpload({ bookId, entryId });
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
@@ -66,55 +40,15 @@ export function PhotoPanel({
     onChange(items.map((item) => (item.id === selected.id ? { ...item, ...changes } : item)));
   }
 
-  async function upload(files: FileList) {
-    setError(null);
-    setUploading(true);
-
+  async function addFiles(files: FileList) {
     try {
-      const added: PlacedMedia[] = [];
-
-      for (const file of Array.from(files).slice(0, 10)) {
-        const size = await readImageSize(file);
-
-        const form = new FormData();
-        form.set("bookId", bookId);
-        if (entryId) form.set("entryId", entryId);
-        form.set("file", file);
-        if (size) {
-          form.set("width", String(size.width));
-          form.set("height", String(size.height));
-        }
-
-        const response = await fetch("/api/attachments/upload", { method: "POST", body: form });
-        const result = (await response.json()) as
-          | { id: string; path: string; url: string | null }
-          | { error: string };
-
-        if (!response.ok || "error" in result) {
-          setError("error" in result ? result.error : "Could not upload that image.");
-          continue;
-        }
-
-        if (result.url) onAddUrl(result.path, result.url);
-
-        added.push({
-          ...DEFAULT_PLACEMENT,
-          id: crypto.randomUUID(),
-          attachmentId: result.id,
-          path: result.path,
-          aspect: size ? size.height / size.width : 1,
-          // Stagger so several at once do not land exactly on top of each other.
-          x: 0.08 + added.length * 0.05,
-          y: 0.06 + added.length * 0.05,
-        });
-      }
-
-      if (added.length > 0) {
-        onChange([...items, ...added]);
-        onSelect(added.at(-1)!.id);
+      const { placed, urls } = await upload(Array.from(files));
+      for (const [path, url] of urls) onAddUrl(path, url);
+      if (placed.length > 0) {
+        onChange([...items, ...placed]);
+        onSelect(placed.at(-1)!.id);
       }
     } finally {
-      setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
     }
   }
@@ -125,7 +59,8 @@ export function PhotoPanel({
         <div>
           <h3 className="font-serif text-base text-ink">Photographs</h3>
           <p className="mt-0.5 text-xs text-ink-muted">
-            Drag to move, or use the arrow keys. Everything stays private to this book.
+            Drag across the fold to move a photograph onto the next page. Everything stays
+            private to this book.
           </p>
         </div>
 
@@ -136,7 +71,7 @@ export function PhotoPanel({
           multiple
           className="sr-only"
           onChange={(event) => {
-            if (event.target.files?.length) void upload(event.target.files);
+            if (event.target.files?.length) void addFiles(event.target.files);
           }}
         />
 
@@ -168,6 +103,20 @@ export function PhotoPanel({
 
       {selected ? (
         <div className="space-y-4 border-t border-rule pt-4">
+          <Field label="Which page" htmlFor="page" hint="Counting from the start of this entry.">
+            <Input
+              id="page"
+              type="number"
+              min={1}
+              max={200}
+              value={selected.page + 1}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (Number.isFinite(value)) patch({ page: Math.max(0, Math.round(value) - 1) });
+              }}
+            />
+          </Field>
+
           <Field label="Shape" htmlFor="mask">
             <div id="mask" className="flex flex-wrap gap-1.5">
               {MASK_IDS.map((id) => (
@@ -295,7 +244,14 @@ export function PhotoPanel({
               type="button"
               variant="secondary"
               size="sm"
-              onClick={() => patch({ rotation: 0, x: 0.08, y: 0.06, width: 0.42 })}
+              onClick={() =>
+                patch({
+                  rotation: 0,
+                  x: DEFAULT_PLACEMENT.x,
+                  y: DEFAULT_PLACEMENT.y,
+                  width: DEFAULT_PLACEMENT.width,
+                })
+              }
             >
               Reset position
             </Button>
