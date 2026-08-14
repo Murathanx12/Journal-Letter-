@@ -1,0 +1,12 @@
+# Normalise line endings so the repository stays LF regardless of who commits
+# from which operating system.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

@@ -76,10 +76,8 @@ export function hasRealChange(before: string, after: string): boolean {
 }
 
 /**
- * How much of the paragraph the model wants to rewrite, 0–1.
- *
- * Used as a guard rail: "gentle" corrections that touch a large share of the
- * words are not gentle, whatever the model says, and get held back.
+ * How much of the paragraph's raw text the model wants to rewrite, 0–1.
+ * Counts every difference, including punctuation and capitalisation.
  */
 export function changeRatio(before: string, after: string): number {
   const ops = diffWords(before, after);
@@ -94,4 +92,58 @@ export function changeRatio(before: string, after: string): number {
   }
 
   return total === 0 ? 0 : changed / total;
+}
+
+/** Strip case and surrounding punctuation, so `"Askim,"` and `"askim"` match. */
+function normaliseWord(word: string): string {
+  return word
+    .toLowerCase()
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .replace(/[^\p{L}\p{N}]+$/u, "");
+}
+
+function words(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map(normaliseWord)
+    .filter((word) => word.length > 0);
+}
+
+export type WordChangeStats = {
+  /** Words added or removed, ignoring case and punctuation. */
+  changed: number;
+  total: number;
+  ratio: number;
+};
+
+/**
+ * How much the *vocabulary* changed, ignoring case and punctuation.
+ *
+ * This is the measurement that matters for gentle proofreading. Capitalising a
+ * sentence and adding a full stop rewrites a lot of characters but changes no
+ * words at all, and must be allowed. Turning "sooo much askim" into "very much,
+ * my darling" changes the words, and must not be.
+ */
+export function wordChangeStats(before: string, after: string): WordChangeStats {
+  const a = words(before);
+  const b = words(after);
+
+  const lengths: number[][] = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(b.length + 1).fill(0),
+  );
+
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      lengths[i]![j] =
+        a[i] === b[j]
+          ? lengths[i + 1]![j + 1]! + 1
+          : Math.max(lengths[i + 1]![j]!, lengths[i]![j + 1]!);
+    }
+  }
+
+  const common = lengths[0]?.[0] ?? 0;
+  const changed = a.length - common + (b.length - common);
+  const total = a.length + b.length;
+
+  return { changed, total, ratio: total === 0 ? 0 : changed / total };
 }

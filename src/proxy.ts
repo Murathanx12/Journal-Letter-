@@ -54,6 +54,14 @@ export async function proxy(request: NextRequest) {
 
   const { pathname, search } = request.nextUrl;
 
+  // API routes enforce their own authentication and answer in JSON. Redirecting
+  // them to /login would hand an API caller an HTML page with a 200, which is
+  // both useless to parse and a poor security signal — a rejected request
+  // should say 401.
+  if (pathname.startsWith("/api/")) {
+    return response;
+  }
+
   if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

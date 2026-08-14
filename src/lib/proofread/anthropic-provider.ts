@@ -3,12 +3,11 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
 import { serverEnv } from "@/lib/env";
-import { changeRatio, hasRealChange } from "@/lib/text/diff";
 
+import { filterCorrections, type RawCorrection } from "./filter";
 import { systemPrompt, userPrompt } from "./prompts";
 import {
   ProofreadUnavailableError,
-  type ParagraphCorrection,
   type ProofreadProvider,
   type ProofreadRequest,
   type ProofreadResult,
@@ -21,11 +20,6 @@ import {
  * when a person has pressed the button — there is no background pass over
  * anybody's journal.
  */
-
-/** Beyond this share of a paragraph rewritten, "gentle" is not gentle. */
-const GENTLE_CHANGE_LIMIT = 0.35;
-
-type RawCorrection = { index?: unknown; corrected?: unknown; notes?: unknown };
 
 function extractJson(text: string): { corrections?: RawCorrection[] } | null {
   // Models occasionally wrap JSON in prose or a code fence despite instructions.
@@ -70,29 +64,8 @@ export class AnthropicProofreadProvider implements ProofreadProvider {
       return { mode, corrections: [], unchanged: true };
     }
 
-    const corrections: ParagraphCorrection[] = [];
-
-    for (const raw of parsed.corrections) {
-      if (typeof raw.index !== "number" || typeof raw.corrected !== "string") continue;
-
-      const original = paragraphs[raw.index];
-      // A hallucinated index would corrupt a different paragraph.
-      if (typeof original !== "string") continue;
-
-      const corrected = raw.corrected;
-      if (!hasRealChange(original, corrected)) continue;
-
-      // The guard rail that makes "gentle" mean something. If the model has
-      // rewritten a third of the paragraph, that is not a spelling fix, and we
-      // drop it rather than offering it as one.
-      if (mode === "gentle" && changeRatio(original, corrected) > GENTLE_CHANGE_LIMIT) continue;
-
-      const notes = Array.isArray(raw.notes)
-        ? raw.notes.filter((note): note is string => typeof note === "string").slice(0, 6)
-        : [];
-
-      corrections.push({ index: raw.index, original, corrected, notes });
-    }
+    // Everything the model proposed is filtered before a human sees it.
+    const corrections = filterCorrections(paragraphs, parsed.corrections, mode);
 
     return { mode, corrections, unchanged: corrections.length === 0 };
   }

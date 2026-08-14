@@ -84,9 +84,11 @@ export function toPlainText(doc: RichTextDoc | RichTextNode | null | undefined):
     }
 
     const isBlock = BLOCK_TYPES.has(node.type);
-    // Containers (bulletList) shouldn't add their own blank line — only the
-    // leaves inside them should.
-    const isContainer = node.type === "bulletList" || node.type === "orderedList";
+    // Containers must not add a line of their own — the blocks nested inside
+    // them already do. A `listItem` wraps a paragraph, so counting both would
+    // put a blank line between every bullet.
+    const isContainer =
+      node.type === "bulletList" || node.type === "orderedList" || node.type === "listItem";
 
     for (const child of node.content ?? []) walk(child);
 
