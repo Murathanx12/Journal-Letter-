@@ -2,7 +2,7 @@ import { BookSurface } from "@/components/book/book-surface";
 import { DayHeading } from "@/components/book/day-heading";
 import { EntryContent } from "@/components/book/entry-content";
 import type { Book, BookMember } from "@/lib/books/queries";
-import { getBookDays } from "@/lib/entries/queries";
+import { getBookDays, signDayMedia } from "@/lib/entries/queries";
 import { cn } from "@/lib/utils/cn";
 
 const PAGE_RATIOS: Record<string, string> = {
@@ -24,6 +24,7 @@ const PAGE_RATIOS: Record<string, string> = {
  */
 export async function PrintPreview({ book, members }: { book: Book; members: BookMember[] }) {
   const page = await getBookDays(book.id, { dayLimit: 2 });
+  const mediaUrls = await signDayMedia(page.days);
   const memberMap = new Map(members.map((member) => [member.userId, member]));
   const ratio = PAGE_RATIOS[book.resolvedDesign.pageSize] ?? "1 / 1.414";
 
@@ -73,7 +74,7 @@ export async function PrintPreview({ book, members }: { book: Book; members: Boo
                         className={cn("book-prose max-w-none text-[#1a1a1a]")}
                         data-indent={book.resolvedDesign.preset.indentParagraphs ? "true" : "false"}
                       >
-                        <EntryContent content={entry.content} />
+                        <EntryContent content={entry.content} mediaUrls={mediaUrls} />
                       </div>
                     </div>
                   ))}

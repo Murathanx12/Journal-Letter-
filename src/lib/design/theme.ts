@@ -143,11 +143,25 @@ export type TypographyPreset = {
   /** Body size in px at desktop width. */
   baseSize: number;
   lineHeight: number;
+  /**
+   * An entry's own title, as a multiple of the body size.
+   *
+   * Relative rather than absolute so that turning the book's text up for tired
+   * eyes takes the titles with it — a title pinned to 24px would quietly become
+   * *smaller* than the body it heads.
+   */
+  titleSize: number;
+  /** Font weight for an entry's title. 400 is regular, 700 is bold. */
+  titleWeight: number;
   /** How a day's chapter heading is rendered. */
   dateStyle: "smallcaps" | "plain" | "underlined" | "centered";
   /** Indent paragraphs instead of spacing them, as printed novels do. */
   indentParagraphs: boolean;
 };
+
+/** What the settings screen offers. Wider than this stops looking like a book. */
+export const TITLE_SIZE_RANGE = { min: 1, max: 2.4 } as const;
+export const TITLE_WEIGHTS = [400, 500, 600, 700, 800] as const;
 
 export const PRESETS: Record<PresetId, TypographyPreset> = {
   "classic-novel": {
@@ -158,6 +172,8 @@ export const PRESETS: Record<PresetId, TypographyPreset> = {
     headingFont: "literata",
     baseSize: 18,
     lineHeight: 1.75,
+    titleSize: 1.35,
+    titleWeight: 600,
     dateStyle: "centered",
     indentParagraphs: true,
   },
@@ -169,6 +185,8 @@ export const PRESETS: Record<PresetId, TypographyPreset> = {
     headingFont: "inter",
     baseSize: 17,
     lineHeight: 1.7,
+    titleSize: 1.3,
+    titleWeight: 600,
     dateStyle: "plain",
     indentParagraphs: false,
   },
@@ -180,6 +198,8 @@ export const PRESETS: Record<PresetId, TypographyPreset> = {
     headingFont: "cormorant",
     baseSize: 21,
     lineHeight: 1.7,
+    titleSize: 1.45,
+    titleWeight: 600,
     dateStyle: "centered",
     indentParagraphs: false,
   },
@@ -191,6 +211,8 @@ export const PRESETS: Record<PresetId, TypographyPreset> = {
     headingFont: "inter",
     baseSize: 16,
     lineHeight: 1.65,
+    titleSize: 1.25,
+    titleWeight: 700,
     dateStyle: "underlined",
     indentParagraphs: false,
   },
@@ -202,6 +224,8 @@ export const PRESETS: Record<PresetId, TypographyPreset> = {
     headingFont: "courier-prime",
     baseSize: 16,
     lineHeight: 1.8,
+    titleSize: 1.2,
+    titleWeight: 700,
     dateStyle: "smallcaps",
     indentParagraphs: false,
   },
@@ -213,6 +237,8 @@ export const PRESETS: Record<PresetId, TypographyPreset> = {
     headingFont: "caveat",
     baseSize: 18,
     lineHeight: 1.8,
+    titleSize: 1.5,
+    titleWeight: 600,
     dateStyle: "centered",
     indentParagraphs: false,
   },
@@ -363,6 +389,9 @@ export type BookDesign = {
   headingFont: FontId | null;
   baseSize: number | null;
   lineHeight: number | null;
+  /** An entry title's size, as a multiple of the body size. */
+  titleSize: number | null;
+  titleWeight: number | null;
   /** Show each writer's chosen font for their own entries. */
   perAuthorFonts: boolean;
   showSignatures: boolean;
@@ -378,6 +407,8 @@ export const DEFAULT_DESIGN: BookDesign = {
   headingFont: null,
   baseSize: null,
   lineHeight: null,
+  titleSize: null,
+  titleWeight: null,
   perAuthorFonts: true,
   showSignatures: true,
   pageSize: "A5",
@@ -404,6 +435,16 @@ export function parseDesign(value: unknown): BookDesign {
   const baseSize = typeof raw.baseSize === "number" && raw.baseSize >= 13 && raw.baseSize <= 26 ? raw.baseSize : null;
   const lineHeight =
     typeof raw.lineHeight === "number" && raw.lineHeight >= 1.3 && raw.lineHeight <= 2.4 ? raw.lineHeight : null;
+  const titleSize =
+    typeof raw.titleSize === "number" &&
+    raw.titleSize >= TITLE_SIZE_RANGE.min &&
+    raw.titleSize <= TITLE_SIZE_RANGE.max
+      ? raw.titleSize
+      : null;
+  const titleWeight =
+    typeof raw.titleWeight === "number" && TITLE_WEIGHTS.includes(raw.titleWeight as 400)
+      ? raw.titleWeight
+      : null;
   const pageSize =
     raw.pageSize === "A4" || raw.pageSize === "LETTER" || raw.pageSize === "DIGEST" || raw.pageSize === "A5"
       ? raw.pageSize
@@ -415,6 +456,8 @@ export function parseDesign(value: unknown): BookDesign {
     headingFont,
     baseSize,
     lineHeight,
+    titleSize,
+    titleWeight,
     perAuthorFonts: raw.perAuthorFonts !== false,
     showSignatures: raw.showSignatures !== false,
     pageSize,
@@ -428,6 +471,8 @@ export type ResolvedDesign = {
   headingFont: FontDefinition;
   baseSize: number;
   lineHeight: number;
+  titleSize: number;
+  titleWeight: number;
   perAuthorFonts: boolean;
   showSignatures: boolean;
   pageSize: BookDesign["pageSize"];
@@ -441,6 +486,8 @@ export function resolveDesign(design: BookDesign): ResolvedDesign {
     headingFont: FONTS[design.headingFont ?? preset.headingFont],
     baseSize: design.baseSize ?? preset.baseSize,
     lineHeight: design.lineHeight ?? preset.lineHeight,
+    titleSize: design.titleSize ?? preset.titleSize,
+    titleWeight: design.titleWeight ?? preset.titleWeight,
     perAuthorFonts: design.perAuthorFonts,
     showSignatures: design.showSignatures,
     pageSize: design.pageSize,
@@ -454,6 +501,9 @@ export function designToCssVars(design: ResolvedDesign): Record<string, string> 
     "--book-heading-font": design.headingFont.stack,
     "--book-base-size": `${design.baseSize}px`,
     "--book-line-height": String(design.lineHeight),
+    // In `em`, so a title tracks the body size rather than fighting it.
+    "--book-title-size": `${design.titleSize}em`,
+    "--book-title-weight": String(design.titleWeight),
     "--book-paragraph-indent": design.preset.indentParagraphs ? "1.5em" : "0",
     "--book-paragraph-gap": design.preset.indentParagraphs ? "0" : "1em",
   };

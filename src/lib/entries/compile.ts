@@ -1,4 +1,5 @@
 import type { CalendarDate } from "@/lib/date/calendar-date";
+import type { DrawingElement } from "@/lib/media/drawing";
 import type { PlacedMedia } from "@/lib/media/placement";
 
 /**
@@ -31,6 +32,8 @@ export type CompiledEntry = {
   plainText: string;
   /** Photographs placed on the page. Empty for a plain entry. */
   layout: PlacedMedia[];
+  /** Drawings placed on the pages. Empty for a plain entry. */
+  drawing: DrawingElement[];
   correctionState: "original" | "gentle" | "polish";
   hasOriginal: boolean;
   tags: string[];
@@ -45,7 +48,16 @@ export type BookDay = {
   entries: CompiledEntry[];
 };
 
-export function compareWithinDay(a: CompiledEntry, b: CompiledEntry): number {
+/**
+ * Everything ordering a day actually needs.
+ *
+ * Deliberately narrower than `CompiledEntry`: reordering a day should not
+ * require fetching every entry's text, photographs and drawings just to decide
+ * which of two letters comes first.
+ */
+export type DayOrderable = Pick<CompiledEntry, "id" | "withinDayOrder" | "createdAt">;
+
+export function compareWithinDay(a: DayOrderable, b: DayOrderable): number {
   if (a.withinDayOrder !== b.withinDayOrder) return a.withinDayOrder - b.withinDayOrder;
   // Same explicit order (the common case — both default to 0), so fall back to
   // who actually hit save first.
@@ -98,7 +110,7 @@ export function nextWithinDayOrder(existing: readonly { withinDayOrder: number }
  * imported days.
  */
 export function reorderWithinDay(
-  dayEntries: readonly CompiledEntry[],
+  dayEntries: readonly DayOrderable[],
   entryId: string,
   direction: "up" | "down",
 ): { id: string; withinDayOrder: number }[] {

@@ -1,11 +1,12 @@
 "use client";
 
-import { FlipHorizontal2, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { FlipHorizontal2, ImagePlus, Loader2, RotateCcw, Trash2, Type } from "lucide-react";
 import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { Card } from "@/components/ui/surface";
+import { FULL_CROP, isCropped } from "@/lib/media/crop";
 import { MASKS, MASK_IDS, type MaskId } from "@/lib/media/masks";
 import { DEFAULT_PLACEMENT, type PlacedMedia } from "@/lib/media/placement";
 import { useMediaUpload } from "@/lib/media/use-upload";
@@ -19,7 +20,8 @@ export function PhotoPanel({
   selectedId,
   onSelect,
   onChange,
-  onAddUrl,
+  onAddUrls,
+  onPutBackInWriting,
 }: {
   bookId: string;
   entryId: string | null;
@@ -27,8 +29,10 @@ export function PhotoPanel({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChange: (items: PlacedMedia[]) => void;
-  /** Registers the signed URL for a freshly uploaded photograph. */
-  onAddUrl: (path: string, url: string) => void;
+  /** Registers signed URLs for freshly uploaded photographs, keyed by path. */
+  onAddUrls: (urls: [string, string][]) => void;
+  /** Takes this photograph off the page and back into the writing. */
+  onPutBackInWriting: (item: PlacedMedia) => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const { upload, uploading, error } = useMediaUpload({ bookId, entryId });
@@ -43,7 +47,7 @@ export function PhotoPanel({
   async function addFiles(files: FileList) {
     try {
       const { placed, urls } = await upload(Array.from(files));
-      for (const [path, url] of urls) onAddUrl(path, url);
+      onAddUrls(urls);
       if (placed.length > 0) {
         onChange([...items, ...placed]);
         onSelect(placed.at(-1)!.id);
@@ -229,6 +233,41 @@ export function PhotoPanel({
             </Field>
           </div>
 
+          <Field
+            label="Crop"
+            htmlFor="crop"
+            hint="Trims what is shown. The photograph itself is never changed, so this can always be undone."
+          >
+            <div id="crop" className="space-y-3">
+              <CropSlider
+                label="From the left"
+                value={selected.crop.x}
+                max={1 - selected.crop.w}
+                onChange={(x) => patch({ crop: { ...selected.crop, x } })}
+              />
+              <CropSlider
+                label="From the top"
+                value={selected.crop.y}
+                max={1 - selected.crop.h}
+                onChange={(y) => patch({ crop: { ...selected.crop, y } })}
+              />
+              <CropSlider
+                label="Width kept"
+                value={selected.crop.w}
+                min={0.05}
+                max={1 - selected.crop.x}
+                onChange={(w) => patch({ crop: { ...selected.crop, w } })}
+              />
+              <CropSlider
+                label="Height kept"
+                value={selected.crop.h}
+                min={0.05}
+                max={1 - selected.crop.y}
+                onChange={(h) => patch({ crop: { ...selected.crop, h } })}
+              />
+            </div>
+          </Field>
+
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -238,6 +277,28 @@ export function PhotoPanel({
             >
               <FlipHorizontal2 className="h-4 w-4" aria-hidden="true" />
               Flip
+            </Button>
+
+            {isCropped(selected.crop) ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => patch({ crop: FULL_CROP })}
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                Whole picture
+              </Button>
+            ) : null}
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => onPutBackInWriting(selected)}
+            >
+              <Type className="h-4 w-4" aria-hidden="true" />
+              Back into the writing
             </Button>
 
             <Button
@@ -276,5 +337,43 @@ export function PhotoPanel({
         </p>
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * One edge of the crop.
+ *
+ * Sliders rather than handles on the picture, because this panel is also how a
+ * page is arranged with a keyboard — and the corner-dragging version lives on
+ * the picture in the writing, where the whole photograph is on screen to drag
+ * back out to.
+ */
+function CropSlider({
+  label,
+  value,
+  min = 0,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min?: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="flex items-center gap-3 text-xs text-ink-muted">
+      <span className="w-24 shrink-0">{label}</span>
+      <input
+        type="range"
+        min={Math.round(min * 100)}
+        max={Math.round(Math.max(min, max) * 100)}
+        value={Math.round(value * 100)}
+        onChange={(event) => onChange(Number(event.target.value) / 100)}
+        className="w-full accent-[var(--color-brand)]"
+        aria-label={label}
+      />
+      <span className="w-9 shrink-0 text-right tabular-nums">{Math.round(value * 100)}%</span>
+    </label>
   );
 }

@@ -2,8 +2,9 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/supabase/database.types";
-import { asRichTextDoc } from "@/lib/text/rich-text";
+import { asRichTextDoc, imagePathsInDoc } from "@/lib/text/rich-text";
 import type { CalendarDate } from "@/lib/date/calendar-date";
+import { parseDrawing } from "@/lib/media/drawing";
 import { parseLayout, pathsInLayout, type PlacedMedia } from "@/lib/media/placement";
 import { signMediaPaths } from "@/lib/media/storage";
 
@@ -16,7 +17,7 @@ import { groupEntriesByDay, type BookDay, type CompiledEntry } from "./compile";
  */
 
 const ENTRY_COLUMNS =
-  "id, book_id, author_id, entry_date, within_day_order, created_at, updated_at, title, content, plain_text, original_content, original_plain_text, correction_state, mood, tags, location, sealed_until, status, layout";
+  "id, book_id, author_id, entry_date, within_day_order, created_at, updated_at, title, content, plain_text, original_content, original_plain_text, correction_state, mood, tags, location, sealed_until, status, layout, drawing";
 
 type EntryRow = Pick<
   Tables<"entries">,
@@ -39,6 +40,7 @@ type EntryRow = Pick<
   | "sealed_until"
   | "status"
   | "layout"
+  | "drawing"
 >;
 
 function toCompiled(row: EntryRow): CompiledEntry {
@@ -52,6 +54,7 @@ function toCompiled(row: EntryRow): CompiledEntry {
     content: row.content,
     plainText: row.plain_text,
     layout: parseLayout(row.layout),
+    drawing: parseDrawing(row.drawing),
     correctionState: row.correction_state,
     hasOriginal: row.original_content !== null,
     tags: row.tags,
@@ -228,23 +231,33 @@ export async function getEntriesForDate(bookId: string, date: CalendarDate): Pro
   return (data ?? []).map(toCompiled);
 }
 
+/** Anything an entry can hold a picture in. */
+type MediaBearing = { layout: readonly PlacedMedia[]; content?: unknown };
+
 /**
  * Signed URLs for every photograph across a set of entries, in one round trip.
  *
  * Signing per image would be a request per picture on a page that might have
  * dozens.
+ *
+ * Two places hold pictures and both must be covered: `layout`, the stickers
+ * pinned to a page, and the writing itself, which carries image nodes with a
+ * storage path where the caret was when they were pasted.
  */
 export async function signEntryMedia(
-  entries: readonly { layout: readonly PlacedMedia[] }[],
+  entries: readonly MediaBearing[],
 ): Promise<Map<string, string>> {
-  const paths = entries.flatMap((entry) => pathsInLayout(entry.layout));
+  const paths = entries.flatMap((entry) => [
+    ...pathsInLayout(entry.layout),
+    ...imagePathsInDoc(entry.content),
+  ]);
   if (paths.length === 0) return new Map();
   return signMediaPaths(paths);
 }
 
 /** Same, for entries already grouped into days. */
 export async function signDayMedia(
-  days: readonly { entries: readonly { layout: readonly PlacedMedia[] }[] }[],
+  days: readonly { entries: readonly MediaBearing[] }[],
 ): Promise<Map<string, string>> {
   return signEntryMedia(days.flatMap((day) => day.entries));
 }

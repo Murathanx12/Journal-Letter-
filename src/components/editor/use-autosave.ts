@@ -54,6 +54,7 @@ export function useAutosave({
   title,
   content,
   layout,
+  drawing,
   changeCount,
   enabled = true,
 }: {
@@ -63,6 +64,7 @@ export function useAutosave({
   title: string;
   content: RichTextDoc;
   layout: unknown[];
+  drawing: unknown[];
   /** Incremented by the caller on every edit. 0 means "untouched". */
   changeCount: number;
   enabled?: boolean;
@@ -79,9 +81,9 @@ export function useAutosave({
   // text. Assigned in an effect rather than during render — mutating a ref while
   // rendering is not allowed, and this effect is declared first so it always
   // runs before the debounce effect below.
-  const latest = useRef({ entryDate, title, content, layout, entryId, changeCount });
+  const latest = useRef({ entryDate, title, content, layout, drawing, entryId, changeCount });
   useEffect(() => {
-    latest.current = { entryDate, title, content, layout, entryId, changeCount };
+    latest.current = { entryDate, title, content, layout, drawing, entryId, changeCount };
   });
 
   const busy = useRef(false);
@@ -123,6 +125,7 @@ export function useAutosave({
               title: snapshot.title.trim() ? snapshot.title.trim() : null,
               content: snapshot.content,
               layout: snapshot.layout,
+              drawing: snapshot.drawing,
             }),
           });
 
@@ -235,5 +238,32 @@ export function useAutosave({
     setFailed(false);
   }, []);
 
-  return { entryId, status, lastSavedAt, saveNow: save, discardLocal, markSaved, localKey: key };
+  /**
+   * Take ownership of an entry created elsewhere — by the Save or Publish
+   * button, which goes through a Server Action rather than through here.
+   *
+   * Without this, autosave still believes there is no entry yet, and the next
+   * save it makes *inserts a second one*. That is the duplicate letters: press
+   * "Add to the book" within a second or so of typing, and the debounced save
+   * already in flight lands afterwards and creates a draft copy of the letter
+   * that was just published.
+   *
+   * The ref is written as well as the state, because a save can fire before
+   * React has re-rendered and would otherwise read the stale `null`.
+   */
+  const adopt = useCallback((id: string) => {
+    setEntryId(id);
+    latest.current.entryId = id;
+  }, []);
+
+  return {
+    entryId,
+    status,
+    lastSavedAt,
+    saveNow: save,
+    discardLocal,
+    markSaved,
+    adopt,
+    localKey: key,
+  };
 }

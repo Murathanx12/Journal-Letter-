@@ -121,7 +121,7 @@ export default async function BookHomePage({
               <div key={day.date} className="space-y-6">
                 <DayHeading date={day.date} preset={book.resolvedDesign.preset} />
                 <div className="space-y-10">
-                  {day.entries.map((entry) => (
+                  {day.entries.map((entry, index) => (
                     <EntryBlock
                       key={entry.id}
                       entry={entry}
@@ -131,6 +131,11 @@ export default async function BookHomePage({
                       canEdit={entry.authorId === user?.id}
                       isFavorite={favorites.has(entry.id)}
                       mediaUrls={mediaUrls}
+                      order={
+                        day.entries.length > 1
+                          ? { isFirst: index === 0, isLast: index === day.entries.length - 1 }
+                          : undefined
+                      }
                     />
                   ))}
                 </div>

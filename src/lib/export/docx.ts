@@ -227,7 +227,11 @@ export async function renderBookDocx(doc: ExportDocument): Promise<Uint8Array> {
               new TextRun({
                 text: entry.title,
                 font: headingFont,
-                size: Math.round(bodySize * 1.15),
+                // The book's own setting, so a Word copy matches the screen.
+                size: Math.round(bodySize * doc.design.titleSize),
+                // Word has one bold flag, not a weight axis, so semibold and
+                // above become bold and the lighter weights stay regular.
+                bold: doc.design.titleWeight >= 600,
               }),
             ],
           }),

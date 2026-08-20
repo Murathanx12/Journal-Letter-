@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth/session";
+import { parseDrawing } from "@/lib/media/drawing";
 import { parseLayout } from "@/lib/media/placement";
-import { calendarDate, layoutSchema, richTextDoc } from "@/lib/validation/schemas";
-import { asRichTextDoc, toPlainText } from "@/lib/text/rich-text";
+import { calendarDate, drawingSchema, layoutSchema, richTextDoc } from "@/lib/validation/schemas";
+import { asRichTextDoc, toPlainText, withoutImageUrls } from "@/lib/text/rich-text";
 import { asJson } from "@/lib/supabase/json";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,6 +32,7 @@ const bodySchema = z.object({
   title: z.string().trim().max(160).nullable(),
   content: richTextDoc,
   layout: layoutSchema,
+  drawing: drawingSchema,
 });
 
 export async function POST(request: NextRequest) {
@@ -51,10 +53,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
 
-  const { bookId, entryId, entryDate, title, content } = parsed.data;
+  const { bookId, entryId, entryDate, title } = parsed.data;
   const supabase = await createClient();
+  // See `saveEntry`: a signed URL must never reach the database.
+  const content = withoutImageUrls(parsed.data.content);
   const plainText = toPlainText(asRichTextDoc(content));
   const layout = parseLayout(parsed.data.layout);
+  const drawing = parseDrawing(parsed.data.drawing);
 
   if (entryId) {
     const { data, error } = await supabase
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
         content: asJson(content),
         plain_text: plainText,
         layout: asJson(layout),
+        drawing: asJson(drawing),
       })
       .eq("id", entryId)
       .eq("book_id", bookId)
@@ -86,7 +92,7 @@ export async function POST(request: NextRequest) {
 
   // Nothing typed yet — do not litter the book with empty drafts. A page that
   // is only photographs so far still counts as something worth keeping.
-  if (plainText.trim().length === 0 && !title && layout.length === 0) {
+  if (plainText.trim().length === 0 && !title && layout.length === 0 && drawing.length === 0) {
     return NextResponse.json({ entryId: null, savedAt: null });
   }
 
@@ -100,6 +106,7 @@ export async function POST(request: NextRequest) {
       content: asJson(content),
       plain_text: plainText,
       layout: asJson(layout),
+      drawing: asJson(drawing),
       status: "draft",
     })
     .select("id, updated_at")

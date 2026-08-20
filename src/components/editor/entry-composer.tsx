@@ -8,10 +8,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { CopyButton } from "@/components/editor/copy-button";
 import { SpellingBar } from "@/components/editor/spelling-bar";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { DrawingCanvas } from "@/components/media/drawing-canvas";
+import { DrawingLayer } from "@/components/media/drawing-layer";
 import { PageStickers } from "@/components/media/media-layer";
 import { PhotoArranger } from "@/components/media/photo-arranger";
 import { PhotoPanel } from "@/components/media/photo-panel";
-import { splitByLayer, type PlacedMedia } from "@/lib/media/placement";
+import type { PinToPage } from "@/components/editor/book-image";
+import { splitElementsByLayer, type DrawingElement } from "@/lib/media/drawing";
+import { DEFAULT_PLACEMENT, splitByLayer, type PlacedMedia } from "@/lib/media/placement";
 import { useMediaUpload } from "@/lib/media/use-upload";
 import {
   localDraftKey,
@@ -25,7 +29,13 @@ import { Checkbox, Field, FormError, Input } from "@/components/ui/form";
 import { Card } from "@/components/ui/surface";
 import { captureOriginal, deleteEntry, saveEntry } from "@/lib/entries/actions";
 import type { WordSuggestion } from "@/lib/proofread/suggestions";
-import { countWords, EMPTY_DOC, toPlainText, type RichTextDoc } from "@/lib/text/rich-text";
+import {
+  countWords,
+  EMPTY_DOC,
+  toPlainText,
+  withImageUrls,
+  type RichTextDoc,
+} from "@/lib/text/rich-text";
 import { formatLongDate, type CalendarDate } from "@/lib/date/calendar-date";
 import { cn } from "@/lib/utils/cn";
 import { useHydrated } from "@/lib/utils/use-hydrated";
@@ -41,6 +51,7 @@ export type ComposerEntry = {
   hasOriginal: boolean;
   correctionState: "original" | "gentle" | "polish";
   layout: PlacedMedia[];
+  drawing: DrawingElement[];
 };
 
 export function EntryComposer({
@@ -62,9 +73,22 @@ export function EntryComposer({
   const [saving, startSaving] = useTransition();
   const hydrated = useHydrated();
 
+  /**
+   * The document with its pictures' signed URLs filled back in.
+   *
+   * Only the storage path is stored, because a signed URL expires within the
+   * hour — so an entry opened the next day would otherwise show a page of
+   * broken pictures. The URLs were signed for this request; putting them back
+   * is what the editor needs to actually display anything.
+   */
+  const openingContent = useMemo(
+    () => (entry ? withImageUrls(entry.content, initialMediaUrls ?? {}) : EMPTY_DOC),
+    [entry, initialMediaUrls],
+  );
+
   const [entryDate, setEntryDate] = useState<CalendarDate>(entry?.entryDate ?? bookToday);
   const [title, setTitle] = useState(entry?.title ?? "");
-  const [content, setContent] = useState<RichTextDoc>(entry?.content ?? EMPTY_DOC);
+  const [content, setContent] = useState<RichTextDoc>(openingContent);
   const [tagsText, setTagsText] = useState((entry?.tags ?? []).join(", "));
   const [sealed, setSealed] = useState(Boolean(entry?.sealedUntil));
   const [sealedUntil, setSealedUntil] = useState<string>(entry?.sealedUntil ?? "");
@@ -81,13 +105,31 @@ export function EntryComposer({
   const preCorrectionDoc = useRef<RichTextDoc | null>(null);
   const originalCaptured = useRef(false);
 
-  const [tab, setTab] = useState<"write" | "photos">("write");
+  const [tab, setTab] = useState<"write" | "photos" | "draw">("write");
   const [layout, setLayout] = useState<PlacedMedia[]>(entry?.layout ?? []);
+  const [drawing, setDrawing] = useState<DrawingElement[]>(entry?.drawing ?? []);
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [mediaUrls, setMediaUrls] = useState<Map<string, string>>(
     () => new Map(Object.entries(initialMediaUrls ?? {})),
   );
   const photoInput = useRef<HTMLInputElement>(null);
+
+  /**
+   * Saving and publishing, without ever writing the letter twice.
+   *
+   * Three things conspired to produce duplicates:
+   *
+   *   1. `saveEntry` returns the id of the entry it created, and that id was
+   *      thrown away — so autosave still believed there was no entry and its
+   *      next save *inserted* one. Publishing within a second of typing left a
+   *      draft copy of the letter you had just published.
+   *   2. The button re-enabled as soon as the action resolved, while the page
+   *      was still navigating, so a second press created a second entry.
+   *   3. Autosave carried on running after the letter had been published.
+   *
+   * `adopt` fixes the first, `submitted` fixes the other two.
+   */
+  const [submitted, setSubmitted] = useState(false);
 
   // A counter rather than a boolean, so "has this exact text been saved?" is a
   // comparison instead of a flag somebody has to remember to reset.
@@ -101,7 +143,11 @@ export function EntryComposer({
     title,
     content,
     layout,
+    drawing,
     changeCount,
+    // Once the letter has been added to the book, nothing more should be
+    // written from here: the page is on its way somewhere else.
+    enabled: !submitted,
   });
 
   /**
@@ -145,39 +191,141 @@ export function EntryComposer({
     setSuggestionCount(0);
   }, []);
 
-  const { upload, uploading, error: uploadError } = useMediaUpload({
+  const { upload, uploading, progress, error: uploadError } = useMediaUpload({
     bookId,
     entryId: autosave.entryId,
   });
 
+  const registerUrls = useCallback((urls: [string, string][]) => {
+    if (urls.length === 0) return;
+    setMediaUrls((current) => {
+      const next = new Map(current);
+      for (const [path, url] of urls) next.set(path, url);
+      return next;
+    });
+  }, []);
+
   /**
    * A picture arriving by Ctrl/⌘ + P, by paste or by drop.
    *
-   * It lands on the page and stays selected, so the Photos tab opens with the
-   * right picture already in hand — but the writer is left where they were,
-   * mid-sentence, rather than being thrown into another mode.
+   * It goes into the writing, where the caret is — which is what every word
+   * processor does and therefore the only thing that is not a surprise. It used
+   * to become a sticker pinned near the top of the entry's first page, on top
+   * of the writing, which is both somewhere else entirely and in the way.
+   *
+   * Pinning a photograph to a particular spot on a particular page is still
+   * there, and is still worth having; it just isn't what pasting means. That
+   * lives in the Photos tab, where a drag is unambiguously a drag.
    */
-  const addPhotos = useCallback(
+  const insertPictures = useCallback(
     async (files: readonly File[]) => {
       if (files.length === 0) return;
-      const { placed, urls } = await upload(files);
-      if (urls.length > 0) {
-        setMediaUrls((current) => {
-          const next = new Map(current);
-          for (const [path, url] of urls) next.set(path, url);
-          return next;
-        });
-      }
-      if (placed.length > 0) {
-        setLayout((current) => [...current, ...placed]);
-        setSelectedMediaId(placed.at(-1)!.id);
-        touch();
-      }
+
+      const { images, urls } = await upload(files);
+      registerUrls(urls);
+      if (images.length === 0) return;
+
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      editor
+        .chain()
+        .focus()
+        .insertContent(
+          images.map((image) => ({
+            type: "image",
+            attrs: {
+              src: image.url,
+              path: image.path,
+              alt: "",
+              // Wide enough to be worth looking at, narrow enough that the
+              // letter around it still reads as a letter.
+              width: 0.6,
+              flow: "block",
+            },
+          })),
+        )
+        .run();
+
+      touch();
     },
-    [upload, touch],
+    [upload, registerUrls, touch],
+  );
+
+  /**
+   * Take a picture out of the writing and pin it to the page.
+   *
+   * The two are genuinely different objects — one moves with the sentence it
+   * was pasted into, the other stays a third of the way down page two whatever
+   * is written above it — so this is a conversion rather than a setting. It
+   * opens the Photos tab, because "behind the writing" and "move it" only mean
+   * anything where a drag is unambiguously a drag.
+   */
+  const pinPicture = useCallback(
+    (picture: PinToPage) => {
+      const placed: PlacedMedia = {
+        ...DEFAULT_PLACEMENT,
+        id: crypto.randomUUID(),
+        // A picture pasted before attachments were tracked has no row to point
+        // at; the storage path is what rendering actually needs.
+        attachmentId: picture.attachmentId ?? picture.path,
+        path: picture.path,
+        alt: picture.alt,
+        crop: picture.crop,
+        aspect:
+          picture.srcWidth && picture.srcHeight ? picture.srcHeight / picture.srcWidth : 1,
+        // Roughly the size it already was, so it does not leap when it moves.
+        width: Math.max(0.2, picture.width),
+        layer: picture.layer,
+        mode: "free",
+      };
+
+      setLayout((current) => [...current, placed]);
+      setSelectedMediaId(placed.id);
+      setTab("photos");
+      touch();
+    },
+    [touch],
+  );
+
+  /**
+   * The reverse: take a pinned photograph off the page and put it back into the
+   * writing, at the caret.
+   */
+  const unpinPicture = useCallback(
+    (item: PlacedMedia) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "image",
+          attrs: {
+            src: mediaUrls.get(item.path) ?? null,
+            path: item.path,
+            attachmentId: item.attachmentId,
+            alt: item.alt,
+            width: Math.min(1, Math.max(0.2, item.width)),
+            flow: "block",
+            crop: item.crop,
+            srcWidth: 1000,
+            srcHeight: Math.round(1000 * (item.aspect || 1)),
+          },
+        })
+        .run();
+
+      setLayout((current) => current.filter((candidate) => candidate.id !== item.id));
+      setSelectedMediaId(null);
+      setTab("write");
+      touch();
+    },
+    [mediaUrls, touch],
   );
 
   const stickers = useMemo(() => splitByLayer(layout), [layout]);
+  const drawn = useMemo(() => splitElementsByLayer(drawing), [drawing]);
 
   /**
    * The two ways a picture gets onto the page, bound to the whole screen rather
@@ -210,7 +358,7 @@ export function EntryComposer({
       );
       if (files.length === 0) return;
       event.preventDefault();
-      void addPhotos(files);
+      void insertPictures(files);
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -219,7 +367,7 @@ export function EntryComposer({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("paste", onPaste);
     };
-  }, [tab, addPhotos]);
+  }, [tab, insertPictures]);
 
   /**
    * A highlight was clicked and the fix applied.
@@ -247,6 +395,7 @@ export function EntryComposer({
   );
 
   function publish(status: "draft" | "published") {
+    if (submitted) return;
     setError(null);
     const countAtSubmit = changeCount;
 
@@ -258,6 +407,7 @@ export function EntryComposer({
         title: title.trim() ? title.trim() : null,
         content,
         layout,
+        drawing,
         status,
         tags: tagsText
           .split(",")
@@ -274,6 +424,10 @@ export function EntryComposer({
         return;
       }
 
+      // Before anything else: any save still in flight, or already scheduled,
+      // must now update this entry rather than create another one.
+      autosave.adopt(result.data.entryId);
+      setSubmitted(true);
       autosave.discardLocal();
       autosave.markSaved(countAtSubmit);
       router.push(`/books/${bookId}`);
@@ -378,7 +532,7 @@ export function EntryComposer({
         editor makes both worse.
       */}
       <div role="tablist" aria-label="Editing mode" className="flex gap-1 border-b border-rule">
-        {(["write", "photos"] as const).map((value) => (
+        {(["write", "photos", "draw"] as const).map((value) => (
           <button
             key={value}
             role="tab"
@@ -394,7 +548,9 @@ export function EntryComposer({
           >
             {value === "write"
               ? "Write"
-              : `Photos${layout.length > 0 ? ` (${layout.length})` : ""}`}
+              : value === "photos"
+                ? `Photos${layout.length > 0 ? ` (${layout.length})` : ""}`
+                : `Draw${drawing.length > 0 ? ` (${drawing.length})` : ""}`}
           </button>
         ))}
       </div>
@@ -405,12 +561,13 @@ export function EntryComposer({
       */}
       <div hidden={tab !== "write"}>
         <RichTextEditor
-          initialContent={entry?.content ?? EMPTY_DOC}
+          initialContent={openingContent}
           placeholder="Good morning…"
           onChange={handleChange}
           onEditorReady={handleEditorReady}
           onSuggestionApplied={handleSuggestionApplied}
-          onPasteFiles={(files) => void addPhotos(files)}
+          onPasteFiles={(files) => void insertPictures(files)}
+          onPinPicture={pinPicture}
           toolbarExtra={
             <>
               <button
@@ -418,7 +575,7 @@ export function EntryComposer({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => photoInput.current?.click()}
                 disabled={uploading}
-                title="Put a picture on the page (Ctrl/⌘ + P, or just paste one)"
+                title="Put a picture into the writing (Ctrl/⌘ + P — or just paste or drop one)"
                 className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink disabled:opacity-40"
               >
                 {uploading ? (
@@ -426,7 +583,11 @@ export function EntryComposer({
                 ) : (
                   <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
                 )}
-                {uploading ? "Adding…" : "Picture"}
+                {uploading
+                  ? progress && progress.total > 1
+                    ? `Adding ${progress.done + 1} of ${progress.total}…`
+                    : "Adding…"
+                  : "Picture"}
               </button>
 
               <CopyButton
@@ -444,10 +605,12 @@ export function EntryComposer({
             ) : null
           }
           stickers={
-            layout.length > 0 ? (
+            layout.length > 0 || drawing.length > 0 ? (
               <>
                 <PageStickers items={stickers.behind} urls={mediaUrls} className="z-0" />
+                <DrawingLayer elements={drawn.behind} className="z-[1]" />
                 <PageStickers items={stickers.front} urls={mediaUrls} className="z-20" />
+                <DrawingLayer elements={drawn.front} className="z-30" />
               </>
             ) : null
           }
@@ -467,7 +630,7 @@ export function EntryComposer({
           onChange={(event) => {
             const files = event.target.files ? Array.from(event.target.files) : [];
             event.target.value = "";
-            void addPhotos(files);
+            void insertPictures(files);
           }}
         />
 
@@ -499,11 +662,24 @@ export function EntryComposer({
               setLayout(next);
               touch();
             }}
-            onAddUrl={(path, url) =>
-              setMediaUrls((current) => new Map(current).set(path, url))
-            }
+            onAddUrls={registerUrls}
+            onPutBackInWriting={unpinPicture}
           />
         </div>
+      ) : null}
+
+      {tab === "draw" ? (
+        <DrawingCanvas
+          content={content}
+          mediaUrls={mediaUrls}
+          items={layout}
+          elements={drawing}
+          onChange={(next) => {
+            setDrawing(next);
+            touch();
+          }}
+          indentParagraphs={indentParagraphs ?? false}
+        />
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-muted">
@@ -576,7 +752,13 @@ export function EntryComposer({
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-5">
         <div>
           {autosave.entryId ? (
-            <Button type="button" variant="ghost" size="sm" onClick={remove} disabled={saving}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={remove}
+              disabled={saving || submitted}
+            >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               Delete
             </Button>
@@ -588,16 +770,20 @@ export function EntryComposer({
             type="button"
             variant="secondary"
             onClick={() => publish("draft")}
-            disabled={saving}
+            disabled={saving || submitted}
           >
             Save as draft
           </Button>
           <Button
             type="button"
             onClick={() => publish("published")}
-            disabled={saving || plainText.trim().length === 0}
+            disabled={saving || submitted || plainText.trim().length === 0}
           >
-            {saving ? "Saving…" : entry?.status === "published" ? "Save changes" : "Add to the book"}
+            {saving || submitted
+              ? "Saving…"
+              : entry?.status === "published"
+                ? "Save changes"
+                : "Add to the book"}
           </Button>
         </div>
       </div>

@@ -140,6 +140,111 @@ export function fromPlainText(text: string): RichTextDoc {
 }
 
 /**
+ * A copy of an editor document made of nothing but ordinary objects.
+ *
+ * This is not tidiness; without it a Server Action receives a document with
+ * every attribute missing.
+ *
+ * ProseMirror builds each node's attributes with `Object.create(null)`, and
+ * `toJSON` hands that very object out rather than a copy. React's Server Action
+ * serializer will not treat a null-prototype object as data: it encodes it as
+ * an opaque *temporary reference* — the `"$T"` you see in a request body —
+ * which the server may pass back to the client but must never read. Reading one
+ * throws "You cannot dot into a temporary client reference from a server
+ * component".
+ *
+ * So everything carried in an attribute — a paragraph's alignment, a poem's
+ * typeface, and a photograph's storage path — arrives as nothing at all.
+ * Autosave was never affected, because it goes through `fetch` and
+ * `JSON.stringify`; only the explicit Save button, which is a Server Action,
+ * was losing them.
+ *
+ * A JSON round trip is the fix and also the check: anything that survives it is
+ * something React can serialize.
+ */
+export function toPlainDoc(value: unknown): RichTextDoc {
+  return asRichTextDoc(JSON.parse(JSON.stringify(value ?? null)));
+}
+
+// -----------------------------------------------------------------------------
+// Photographs written into the letter itself
+//
+// An image node carries two things that look alike and are not: `path`, the
+// durable storage key, and `src`, a signed URL that stops working within the
+// hour.
+//
+// Only `path` is ever stored. The URL is resolved again every time the writing
+// is rendered, because a signed URL saved into the document would mean an entry
+// opened tomorrow showed broken pictures — and would leave a working credential
+// sitting in a row that everybody else in the book can read.
+// -----------------------------------------------------------------------------
+
+/** Walk every node in a document, replacing any the mapper returns a value for. */
+function mapNodes(doc: RichTextDoc, map: (node: RichTextNode) => RichTextNode): RichTextDoc {
+  const visit = (node: RichTextNode): RichTextNode => {
+    const mapped = map(node);
+    if (!mapped.content) return mapped;
+    return { ...mapped, content: mapped.content.map(visit) };
+  };
+
+  return { type: "doc", content: (doc.content ?? []).map(visit) };
+}
+
+function imagePath(node: RichTextNode): string | null {
+  if (node.type !== "image") return null;
+  const path = node.attrs?.path;
+  return typeof path === "string" && path.length > 0 ? path : null;
+}
+
+/** Storage paths of every picture placed in the writing, for batch-signing. */
+export function imagePathsInDoc(value: unknown): string[] {
+  const paths = new Set<string>();
+
+  const walk = (node: RichTextNode) => {
+    const path = imagePath(node);
+    if (path) paths.add(path);
+    for (const child of node.content ?? []) walk(child);
+  };
+
+  for (const node of asRichTextDoc(value).content ?? []) walk(node);
+  return [...paths];
+}
+
+/**
+ * Fill in `src` from freshly signed URLs, ready to render.
+ *
+ * A picture whose path has no URL — because signing failed, or because the file
+ * has since been removed — is left without a `src` and simply does not render,
+ * rather than showing a broken image icon in the middle of a letter.
+ */
+export function withImageUrls(
+  value: unknown,
+  urls: Map<string, string> | Record<string, string>,
+): RichTextDoc {
+  const lookup = urls instanceof Map ? urls : new Map(Object.entries(urls));
+
+  return mapNodes(asRichTextDoc(value), (node) => {
+    const path = imagePath(node);
+    if (!path) return node;
+    const url = lookup.get(path);
+    return { ...node, attrs: { ...node.attrs, src: url ?? null } };
+  });
+}
+
+/**
+ * Drop every signed URL before the document is written to the database.
+ *
+ * Applied on the server, so it holds however the document arrived — the explicit
+ * Save button, autosave, or a correction being applied.
+ */
+export function withoutImageUrls(value: unknown): RichTextDoc {
+  return mapNodes(asRichTextDoc(value), (node) => {
+    if (!imagePath(node)) return node;
+    return { ...node, attrs: { ...node.attrs, src: null } };
+  });
+}
+
+/**
  * A short, clean excerpt for cards and search results. Cuts on a word boundary
  * so a preview never ends mid-word.
  */

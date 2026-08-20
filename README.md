@@ -75,14 +75,56 @@ read it, add to it, or start it. Full-text search across everything you are
 allowed to read, which also reports how many times a word appears in the whole
 book, not just in the results on screen.
 
-**Photographs on the page.** Pictures are not attachments in a list — they are
-stuck onto a page. Add one with **Ctrl/⌘ + P** or by simply pasting it. Drag it
+**Pictures in the writing.** Paste a photograph, drop one on the page, or press
+**Ctrl/⌘ + P**, and it lands in the sentence you are writing — exactly where the
+caret is, the way it does in any word processor. Select it and you get the rest:
+drag a corner to resize, **crop** it by dragging the corners of the kept area,
+ask the writing to run down its left or right, describe it for a screen reader,
+or send it **behind the writing**, where it becomes a photograph pinned to the
+page and can be dragged anywhere. Cropping never touches the uploaded file, so it
+can always be widened again. Every picture is shrunk and re-encoded in the browser
+before it is uploaded, with its EXIF rotation baked in, so a four-megabyte
+photograph straight off a phone does not cost four megabytes of data, of storage,
+or of somebody else's download — and does not arrive sideways.
+
+**Photographs stuck to a page.** The other half of pictures, and a different job:
+a photograph pinned to a *place* on a *page*, in the Photos tab. Drag it
 anywhere, drag it across the fold to move it to the next page, resize and rotate
 it, cut it into a shape (circle, arch, heart, hexagon, star, torn-edge cut-out),
 and choose whether it sits **behind** the writing, **in front** of it, or **in**
 it with the text flowing around the cut-out silhouette. Everything works by
 touch, so a page can be arranged on a phone. Positions are stored as fractions of
 a page, so a layout made on a phone looks the same on a laptop.
+
+**Drawing on the pages.** A pen, a rubber, any colour, and a nib from a hairline
+to a broad marker. Everything drawn without putting the pen down becomes *one
+drawing* — an object with a box round it, which the arrow tool picks up, moves,
+resizes, turns, fades, sends behind or in front of the writing, or throws away,
+exactly like a photograph. Strokes go either **under** the writing — a wash of
+colour, a circle round a paragraph — or **over** it, for crossing something out
+or adding a note in the margin. It is built on pointer events with
+`touch-action: none`, so a finger, a stylus, a trackpad and a mouse all take the
+same path and drawing on a phone works properly. Every point is a fraction of its
+drawing, and every drawing a fraction of its page, so what you draw around a
+sentence stays around that sentence at any screen size — and resizing a drawing
+scales its line weight with it.
+
+**Printing the book with its pages.** "Print with the pages", in the reading
+view, prints one sheet per page of the book — so a photograph pinned a third of
+the way down page four is a third of the way down the fourth sheet, and a circle
+drawn round a paragraph is round that paragraph on paper. It works by asking the
+browser to lay the entry out once at the size of the paper and making each sheet
+a *window* onto one column of that single layout, so the print cannot drift out
+of step with what is on screen. Every entry starts on a fresh page, so a short
+letter leaves the rest of its sheet blank — which is how a printed book of
+letters should look. Ctrl/⌘ + P still gives the plain flowing version.
+
+**Choosing the order of a day.** Within a day the person who wrote first comes
+first, which is right until it isn't — two people writing the same evening, or a
+batch of old letters imported in whatever order the export listed them. Move a
+letter up or down and the order is stored, rather than derived by rewriting a
+timestamp into a lie about when it was typed. Only the author of a letter may
+move it, which the database enforces rather than the interface.
 
 **Copy for WhatsApp.** These letters started in a WhatsApp thread and often go
 back to one, so a letter can be copied in WhatsApp's own markup — `*bold*`,
@@ -700,6 +742,32 @@ policy at all, so history cannot be rewritten with an anon or authenticated key.
 Autosave deliberately does not write history — otherwise one letter would
 generate hundreds of rows.
 
+**A page anchor must come before the writing.** Photographs and drawings are
+positioned against an invisible anchor that takes no height — but it still has a
+*place* in the column flow, and everything on the entry is measured from it. An
+anchor written after the writing therefore lands in whichever column the writing
+happened to end in, taking every photograph and drawing with it onto the wrong
+page. Every anchor is emitted before the text, and what covers what is decided by
+`z-index` alone.
+
+**Publishing adopts the entry it created.** `saveEntry` returns the new entry's
+id, and autosave has to be told: otherwise the debounced save already in flight
+still believes there is no entry and *inserts a second one*, leaving a draft copy
+of the letter that was just published. The buttons also stay down until the page
+has actually navigated, because an action resolving is not the same as having
+left.
+
+**A document is made plain before it leaves the editor.** ProseMirror builds
+every node's `attrs` with `Object.create(null)`, and `toJSON` hands that same
+object out. React's Server Action serializer will not treat a null-prototype
+object as *data* — it encodes it as an opaque temporary reference, which the
+server may pass back to the client but must never read. So a document sent
+straight to a Server Action arrives with every attribute missing: a paragraph's
+alignment, a poem's typeface, and a photograph's storage path. Autosave was
+never affected, because it goes through `fetch` and `JSON.stringify`. `onChange`
+therefore runs `toPlainDoc`, and everything downstream gets a document that can
+actually be saved.
+
 **Reading is paginated by day, not by row.** A page boundary must never fall in
 the middle of 14 August.
 
@@ -719,14 +787,20 @@ nothing about whether that book exists.
   and are placed and rendered on the page in the app, but the PDF and DOCX
   render text only. Embedding them requires fetching every signed URL during
   export; the document model already carries the structure for it.
-- **Printing places photographs in the flow, not on their page.** On screen a
-  photograph is stuck to a page of known size. Paper has its own pagination and
-  its own page size, so those coordinates mean nothing there — a picture put on
-  page four would print a page-width off the edge and vanish. Rather than drop
-  them, printing returns them to the writing they belong to, in order, at a
-  readable size.
-- **No freehand drawing.** Pictures can be placed, masked, rotated and layered,
-  but there is no pen tool for drawing on a page.
+- **Ctrl/⌘ + P still prints the flowing version.** The browser's own print
+  command linearises the book and returns photographs to the writing they belong
+  to, in order, at a readable size; drawings are left out. "Print with the pages"
+  is the one that keeps the pages.
+- **Drawings are shown only where there are pages.** A drawing is anchored to a
+  page of the book — a circle round the third paragraph of page two — so it
+  appears in the reading view, in the composer, and in "Print with the pages".
+  The book's home screen and the "read as one column" view have no page four to
+  draw on, and unlike a photograph a scribble cannot be sensibly "returned to the
+  flow", so it is left out there rather than drawn somewhere it does not belong.
+- **The PDF and DOCX exports are still text only.** Printing from the reading
+  view now carries photographs and drawings onto their real pages; the
+  server-rendered exports do not, because they paginate with their own engine
+  and cannot know where the browser broke a page.
 - **Text follows a photograph's outline, not a curve.** `shape-outside` makes
   the writing flow around a cut-out silhouette, and a placed picture can be set
   at any angle — but text itself cannot yet be set along a curved path, which
@@ -755,7 +829,8 @@ nothing about whether that book exists.
 - Bulk WhatsApp export parser with a review screen before import
 - Photographs embedded in PDF and DOCX exports, and placed on their real page
   when printing
-- Freehand drawing on a page, and text set along a curve
+- Photographs and drawings in the PDF and DOCX exports, not only in print
+- Text set along a curve
 - Supabase Realtime, so a shared book updates when the other person posts
 
 **Later**

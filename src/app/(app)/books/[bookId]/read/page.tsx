@@ -1,4 +1,4 @@
-import { BookOpen, Printer, Rows3, BookMarked } from "lucide-react";
+import { BookOpen, Rows3, BookMarked } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -6,6 +6,7 @@ import { BookPages } from "@/components/book/book-pages";
 import { BookSurface } from "@/components/book/book-surface";
 import { DayHeading } from "@/components/book/day-heading";
 import { EntryBlock, SealedEntryBlock } from "@/components/book/entry-block";
+import { PrintedBook } from "@/components/export/printed-book";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/surface";
 import { getSessionUser } from "@/lib/auth/session";
@@ -122,6 +123,13 @@ export default async function ReadPage({
           canEdit={entry.authorId === user?.id}
           isFavorite={favorites.has(entry.id)}
           mediaUrls={mediaUrls}
+          // Reordering only means something when there is something to reorder
+          // against, so a day holding one letter offers no controls at all.
+          order={
+            day.entries.length > 1
+              ? { isFirst: entryIndex === 0, isLast: entryIndex === day.entries.length - 1 }
+              : undefined
+          }
           // The day's heading opens the day's first page, so only the entries
           // after it need turning onto one of their own.
           className={cn("mb-12", entryIndex > 0 && "book-page-start")}
@@ -169,10 +177,18 @@ export default async function ReadPage({
             )}
           </Link>
 
-          <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
-            <Printer className="h-3.5 w-3.5" aria-hidden="true" />
-            Ctrl/⌘ + P to print
-          </span>
+          {/*
+            Printing the book *as a book* — one sheet per page, so photographs
+            and drawings land where they were put. Ctrl/⌘ + P still works and
+            still gives the plain flowing version.
+          */}
+          <PrintedBook
+            days={page.days}
+            members={members}
+            design={book.resolvedDesign}
+            bookId={bookId}
+            mediaUrls={mediaUrls}
+          />
         </div>
       </div>
 

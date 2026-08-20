@@ -205,6 +205,7 @@ export type Database = {
           created_at: string
           entry_date: string
           id: string
+          drawing: Json
           layout: Json
           location: string | null
           mood: string | null
@@ -228,6 +229,7 @@ export type Database = {
           created_at?: string
           entry_date: string
           id?: string
+          drawing?: Json
           layout?: Json
           location?: string | null
           mood?: string | null
@@ -251,6 +253,7 @@ export type Database = {
           created_at?: string
           entry_date?: string
           id?: string
+          drawing?: Json
           layout?: Json
           location?: string | null
           mood?: string | null

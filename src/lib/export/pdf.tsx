@@ -107,7 +107,12 @@ export async function renderBookPdf(doc: ExportDocument): Promise<Uint8Array> {
     },
     entryTitle: {
       fontFamily: heading,
-      fontSize: fontSize * 1.15,
+      // The book's own setting, so a printed copy matches what is on screen.
+      fontSize: fontSize * doc.design.titleSize,
+      // The base-14 PDF fonts have exactly two weights, so anything the reader
+      // called semibold or heavier prints bold and everything else prints
+      // regular. Better an honest approximation than silently ignoring it.
+      fontWeight: doc.design.titleWeight >= 600 ? "bold" : "normal",
       marginBottom: 6,
     },
     paragraph: { marginBottom: doc.design.preset.indentParagraphs ? 0 : fontSize * 0.6 },

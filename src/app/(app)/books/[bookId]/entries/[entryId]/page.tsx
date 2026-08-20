@@ -74,6 +74,7 @@ export default async function EntryPage({
             hasOriginal: entry.hasOriginal,
             correctionState: entry.correctionState,
             layout: entry.layout,
+            drawing: entry.drawing,
           }}
           initialMediaUrls={mediaUrls}
           indentParagraphs={book.resolvedDesign.preset.indentParagraphs}

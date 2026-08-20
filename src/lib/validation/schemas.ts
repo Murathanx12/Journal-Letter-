@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-import { ACCENT_IDS, COVER_PRESET_IDS, FONT_IDS, PRESET_IDS } from "@/lib/design/theme";
+import {
+  ACCENT_IDS,
+  COVER_PRESET_IDS,
+  FONT_IDS,
+  PRESET_IDS,
+  TITLE_SIZE_RANGE,
+  TITLE_WEIGHTS,
+} from "@/lib/design/theme";
 import { isCalendarDate, isValidTimezone } from "@/lib/date/calendar-date";
 
 /**
@@ -65,6 +72,14 @@ export const updateBookSchema = z.object({
   headingFont: z.enum(FONT_IDS as [string, ...string[]]).nullable(),
   baseSize: z.coerce.number().min(13).max(26).nullable(),
   lineHeight: z.coerce.number().min(1.3).max(2.4).nullable(),
+  /** A multiple of the body size, so titles scale with the reader's text size. */
+  titleSize: z.coerce.number().min(TITLE_SIZE_RANGE.min).max(TITLE_SIZE_RANGE.max).nullable(),
+  titleWeight: z.coerce
+    .number()
+    .refine((value) => TITLE_WEIGHTS.includes(value as (typeof TITLE_WEIGHTS)[number]), {
+      message: "Pick one of the offered weights.",
+    })
+    .nullable(),
   perAuthorFonts: z.boolean(),
   showSignatures: z.boolean(),
   pageSize: z.enum(["A5", "A4", "LETTER", "DIGEST"]),
@@ -82,11 +97,19 @@ export const updateBookSchema = z.object({
  */
 export const layoutSchema = z.array(z.looseObject({})).max(40).default([]);
 
+/**
+ * Freehand strokes, normalised server-side by `parseDrawing` for the same
+ * reason. The cap here is a cheap upper bound on the request body; the real
+ * limits on stroke and point counts live there.
+ */
+export const drawingSchema = z.array(z.looseObject({})).max(300).default([]);
+
 export const saveEntrySchema = z.object({
   bookId: z.uuid(),
   /** Absent when creating. */
   entryId: z.uuid().optional(),
   layout: layoutSchema,
+  drawing: drawingSchema,
   entryDate: calendarDate,
   title: optionalText(160),
   content: richTextDoc,

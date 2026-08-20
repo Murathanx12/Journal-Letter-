@@ -178,6 +178,43 @@
     margin: 1.2em 0;
   }
 
+  /*
+   * A photograph written into the letter, where the caret was.
+   *
+   * The frame carries the size and the float; the picture inside it simply
+   * fills the frame, so the margin the rule above gives a bare image would
+   * double up on the one the frame already has.
+   */
+  .book-image {
+    max-width: 100%;
+  }
+
+  .book-image img {
+    margin: 0;
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /*
+   * A floated picture must not hang out of the bottom of the entry it belongs
+   * to and over the next person's letter. `flow-root` gives the entry a block
+   * formatting context, which contains its own floats without the empty
+   * clearing element the old way needed.
+   */
+  .book-prose {
+    display: flow-root;
+  }
+
+  /*
+   * Text indentation and a floated picture disagree: the first line beside a
+   * float is already inset by the picture, and indenting it again reads as a
+   * mistake. The paragraph after a float starts flush.
+   */
+  .book-prose[data-indent="true"] .book-image + p {
+    text-indent: 0;
+  }
+
   .book-prose em { font-style: italic; }
   .book-prose strong { font-weight: 600; }
   .book-prose u { text-decoration: underline; text-underline-offset: 0.15em; }
@@ -292,11 +329,38 @@
     margin-block: 1em;
   }
 
-  .book-open__leaves .page-anchor {
+  /*
+   * A drawing covers a whole page, so unlike a sticker it has no size of its
+   * own to be given. Outside a paginated book there is no page four to draw on,
+   * and a scribble around a paragraph cannot be "returned to the flow" the way
+   * a photograph can — so it is simply not shown there. See the note on
+   * printing in the README.
+   */
+  .page-drawing {
+    display: none;
+  }
+
+  /*
+   * A drawing is placed exactly like a photograph sticker — same page, same
+   * fractions, same arithmetic — so the two always agree about where page four
+   * is. Outside a paginated book there is no page four, and unlike a photograph
+   * a scribble cannot be sensibly returned to the flow, so it is not drawn.
+   */
+  :is(.book-open__leaves, .printed-leaves) .page-drawing {
+    display: block;
+    position: absolute;
+    left: calc((100% + var(--page-gap, 0px)) * var(--page, 0) + 100% * var(--x, 0));
+    top: calc(var(--page-height, 40rem) * var(--y, 0));
+    width: calc(100% * var(--w, 0.4));
+    aspect-ratio: var(--ar, 1);
+    overflow: visible;
+  }
+
+  :is(.book-open__leaves, .printed-leaves) .page-anchor {
     height: 0;
   }
 
-  .book-open__leaves .page-sticker {
+  :is(.book-open__leaves, .printed-leaves) .page-sticker {
     position: absolute;
     left: calc((100% + var(--page-gap, 0px)) * var(--page, 0) + 100% * var(--x, 0));
     top: calc(var(--page-height, 40rem) * var(--y, 0));
@@ -305,11 +369,11 @@
 
   /* Inside a page, the page *is* the measure — the usual cap would leave half
      of every column empty. */
-  .book-open__leaves .book-prose {
+  :is(.book-open__leaves, .printed-leaves) .book-prose {
     max-width: none;
   }
 
-  .book-open__leaves .tiptap {
+  :is(.book-open__leaves, .printed-leaves) .tiptap {
     min-height: 0;
   }
 
@@ -344,9 +408,94 @@
   }
 }
 
+/*
+ * The printed book, prepared on screen.
+ *
+ * Kept out of the way while it is being measured — off-screen rather than
+ * `display: none`, because a box with no layout has no width to measure and the
+ * whole thing turns on knowing how many pages an entry needs.
+ */
+.printed-book {
+  position: absolute;
+  left: -200vw;
+  top: 0;
+  width: var(--paper-w);
+}
+
+.printed-measure,
+.printed-sheet {
+  width: var(--paper-w);
+  height: var(--paper-h);
+  overflow: hidden;
+  background: white;
+  color: black;
+}
+
+/* The printable area. Positioned, so a photograph on the page measures against
+   this rectangle and not against the sheet including its margins. */
+.printed-window,
+.printed-measure > .printed-leaves {
+  position: absolute;
+  left: var(--paper-margin);
+  top: var(--paper-margin);
+  width: calc(var(--paper-w) - var(--paper-margin) * 2);
+  height: calc(var(--paper-h) - var(--paper-margin) * 2);
+  overflow: hidden;
+}
+
+.printed-measure,
+.printed-sheet {
+  position: relative;
+}
+
+/*
+ * One layout, many windows.
+ *
+ * `column-gap: 0` is what makes a page exactly one column wide, so sliding by
+ * whole multiples of 100% lands each sheet on the next page — and so that the
+ * page arithmetic photographs and drawings already use needs no adjusting.
+ */
+.printed-leaves {
+  width: 100%;
+  height: 100%;
+  column-count: 1;
+  column-gap: 0;
+  column-fill: auto;
+  overflow: visible;
+}
+
 @media print {
   /* Print from the Reading view gives a usable draft without the app around it. */
   .no-print {
+    display: none !important;
+  }
+
+  /*
+   * When the page-by-page copy is present it *is* the printout: the ordinary
+   * flowing version would otherwise print as well, doubling the whole book.
+   */
+  body:has(.printed-book) > *:not(.printed-book) {
+    display: none !important;
+  }
+
+  .printed-book {
+    position: static;
+    left: auto;
+    width: auto;
+  }
+
+  .printed-sheet {
+    break-after: page;
+    break-inside: avoid;
+  }
+
+  /* The last sheet must not push out a trailing blank one. */
+  .printed-sheet:last-child {
+    break-after: auto;
+  }
+
+  /* Only ever a measuring aid; it must never reach paper. */
+  .printed-measure {
     display: none !important;
   }
 
@@ -393,11 +542,11 @@
    * the flow: printed at a readable size, in order, among the writing they
    * belong to.
    */
-  .book-open__leaves .page-anchor {
+  :is(.book-open__leaves, .printed-leaves) .page-anchor {
     height: auto;
   }
 
-  .book-open__leaves .page-sticker {
+  :is(.book-open__leaves, .printed-leaves) .page-sticker {
     position: static;
     transform: none;
     margin-block: 1em;

@@ -111,6 +111,8 @@ export async function updateBook(input: unknown): Promise<ActionResult> {
     headingFont: (values.headingFont as BookDesign["headingFont"]) ?? null,
     baseSize: values.baseSize,
     lineHeight: values.lineHeight,
+    titleSize: values.titleSize,
+    titleWeight: values.titleWeight,
     perAuthorFonts: values.perAuthorFonts,
     showSignatures: values.showSignatures,
     pageSize: values.pageSize,

@@ -1,3 +1,4 @@
+import { asCrop, FULL_CROP, type Crop } from "./crop";
 import { isMaskId, type MaskId } from "./masks";
 
 /**
@@ -44,6 +45,13 @@ export type PlacedMedia = {
 
   /** Width as a fraction of the page width. Height follows from `aspect`. */
   width: number;
+  /**
+   * Which part of the photograph is shown, as fractions of the source.
+   *
+   * Cropping never touches the uploaded file, so it can always be undone —
+   * which matters in a book meant to outlast the decision.
+   */
+  crop: Crop;
   /** Intrinsic height ÷ width, so the picture is never squashed. */
   aspect: number;
 
@@ -64,6 +72,7 @@ export const DEFAULT_PLACEMENT: Omit<PlacedMedia, "id" | "attachmentId" | "path"
   x: 0.1,
   y: 0.08,
   width: 0.42,
+  crop: FULL_CROP,
   aspect: 1,
   rotation: 0,
   mask: "rounded",
@@ -110,6 +119,7 @@ export function parseLayout(value: unknown): PlacedMedia[] {
       x: clamp(item.x, -0.5, 1.5, DEFAULT_PLACEMENT.x),
       y: clamp(item.y, -0.5, 1.5, DEFAULT_PLACEMENT.y),
       width: clamp(item.width, 0.05, 1.6, DEFAULT_PLACEMENT.width),
+      crop: asCrop(item.crop),
       aspect: clamp(item.aspect, 0.05, 20, 1),
       rotation: clamp(item.rotation, -180, 180, 0),
       mask: typeof item.mask === "string" && isMaskId(item.mask) ? item.mask : "none",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { FULL_CROP } from "@/lib/media/crop";
 import { DEFAULT_PLACEMENT, parseLayout, pathsInLayout, splitByLayer } from "@/lib/media/placement";
 
 /**
@@ -20,6 +21,7 @@ const valid = {
   x: 0.25,
   y: 0.4,
   width: 0.5,
+  crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.6 },
   aspect: 0.75,
   rotation: 12,
   mask: "rounded",
@@ -33,6 +35,23 @@ const valid = {
 describe("reading a layout", () => {
   it("keeps a good one intact", () => {
     expect(parseLayout([valid])).toEqual([valid]);
+  });
+
+  it("shows the whole photograph when no crop was stored", () => {
+    const { crop: _crop, ...uncropped } = valid;
+    expect(parseLayout([uncropped])[0]!.crop).toEqual(FULL_CROP);
+  });
+
+  it("refuses a crop that runs off the edge of its own picture", () => {
+    // A crop wider than what is left from its corner would show blank space
+    // where the photograph is not.
+    const parsed = parseLayout([{ ...valid, crop: { x: 0.8, y: 0.9, w: 5, h: 5 } }])[0]!;
+    expect(parsed.crop.x + parsed.crop.w).toBeLessThanOrEqual(1);
+    expect(parsed.crop.y + parsed.crop.h).toBeLessThanOrEqual(1);
+  });
+
+  it("ignores a crop that is not numbers", () => {
+    expect(parseLayout([{ ...valid, crop: "all of it" }])[0]!.crop).toEqual(FULL_CROP);
   });
 
   it("is empty for anything that is not a list", () => {

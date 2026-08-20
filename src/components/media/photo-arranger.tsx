@@ -6,6 +6,7 @@ import { BookPages } from "@/components/book/book-pages";
 import { EntryContent } from "@/components/book/entry-content";
 import { stickerStyle } from "@/components/media/media-layer";
 import { PAGE_HEIGHT } from "@/lib/design/pages";
+import { croppedImageStyle, isCropped } from "@/lib/media/crop";
 import { getMask } from "@/lib/media/masks";
 import { splitByLayer, type PlacedMedia } from "@/lib/media/placement";
 import type { RichTextDoc } from "@/lib/text/rich-text";
@@ -278,8 +279,7 @@ export function PhotoArranger({
           }}
         >
           {url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
+            <CroppedPreview item={item} url={url} />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-surface-sunk text-xs text-ink-muted">
               Image unavailable
@@ -383,20 +383,18 @@ export function PhotoArranger({
               }}
             >
               {url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={url}
-                  alt=""
-                  className="h-full w-full object-cover"
+                <span
+                  className="block h-full w-full"
                   style={{ transform: item.flipX ? "scaleX(-1)" : undefined }}
-                  draggable={false}
-                />
+                >
+                  <CroppedPreview item={item} url={url} />
+                </span>
               ) : null}
             </div>
           );
         })}
 
-          <EntryContent content={content} />
+          <EntryContent content={content} mediaUrls={urls} />
         </div>
 
         <div className="page-anchor">{front.map(renderItem)}</div>
@@ -424,4 +422,24 @@ function probeStyle(page: number): React.CSSProperties {
     top: 0,
     width: "100%",
   } as React.CSSProperties;
+}
+
+/** The photograph as it will actually be read: only the part kept by the crop. */
+function CroppedPreview({ item, url }: { item: PlacedMedia; url: string }) {
+  if (!isCropped(item.crop)) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />;
+  }
+
+  return (
+    <span className="relative block h-full w-full overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt=""
+        draggable={false}
+        style={{ ...croppedImageStyle(item.crop), objectFit: "cover" }}
+      />
+    </span>
+  );
 }

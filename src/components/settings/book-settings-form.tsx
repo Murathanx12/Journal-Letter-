@@ -15,6 +15,8 @@ import {
   FONT_IDS,
   PRESETS,
   PRESET_IDS,
+  TITLE_SIZE_RANGE,
+  TITLE_WEIGHTS,
   type BookCover as BookCoverValue,
   type BookDesign,
   type CoverPresetId,
@@ -22,6 +24,15 @@ import {
   type PresetId,
 } from "@/lib/design/theme";
 import { cn } from "@/lib/utils/cn";
+
+/** Plain words for a number nobody thinks in. */
+const TITLE_WEIGHT_LABELS: Record<number, string> = {
+  400: "Regular",
+  500: "Medium",
+  600: "Semibold",
+  700: "Bold",
+  800: "Extra bold",
+};
 
 export function BookSettingsForm({
   bookId,
@@ -56,6 +67,10 @@ export function BookSettingsForm({
   const [lineHeight, setLineHeight] = useState(
     design.lineHeight ?? PRESETS[design.preset].lineHeight,
   );
+  const [titleSize, setTitleSize] = useState(design.titleSize ?? PRESETS[design.preset].titleSize);
+  const [titleWeight, setTitleWeight] = useState(
+    design.titleWeight ?? PRESETS[design.preset].titleWeight,
+  );
   const [perAuthorFonts, setPerAuthorFonts] = useState(design.perAuthorFonts);
   const [showSignatures, setShowSignatures] = useState(design.showSignatures);
   const [pageSize, setPageSize] = useState(design.pageSize);
@@ -76,6 +91,8 @@ export function BookSettingsForm({
         headingFont: headingFont || null,
         baseSize,
         lineHeight,
+        titleSize,
+        titleWeight,
         perAuthorFonts,
         showSignatures,
         pageSize,
@@ -172,6 +189,8 @@ export function BookSettingsForm({
                   // one; overrides can be re-applied afterwards.
                   setBaseSize(PRESETS[next].baseSize);
                   setLineHeight(PRESETS[next].lineHeight);
+                  setTitleSize(PRESETS[next].titleSize);
+                  setTitleWeight(PRESETS[next].titleWeight);
                   setBodyFont("");
                   setHeadingFont("");
                 }}
@@ -255,6 +274,36 @@ export function BookSettingsForm({
             />
           </Field>
 
+          <Field
+            label={`Entry title size — ${Math.round(titleSize * 100)}% of the text`}
+            htmlFor="titleSize"
+          >
+            <input
+              id="titleSize"
+              type="range"
+              min={TITLE_SIZE_RANGE.min}
+              max={TITLE_SIZE_RANGE.max}
+              step={0.05}
+              value={titleSize}
+              onChange={(e) => setTitleSize(Number(e.target.value))}
+              className="w-full accent-[var(--color-brand)]"
+            />
+          </Field>
+
+          <Field label="Entry title weight" htmlFor="titleWeight">
+            <Select
+              id="titleWeight"
+              value={String(titleWeight)}
+              onChange={(e) => setTitleWeight(Number(e.target.value))}
+            >
+              {TITLE_WEIGHTS.map((weight) => (
+                <option key={weight} value={weight}>
+                  {TITLE_WEIGHT_LABELS[weight]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
           <Field label="Page size for export" htmlFor="pageSize">
             <Select
               id="pageSize"
@@ -268,6 +317,21 @@ export function BookSettingsForm({
             </Select>
           </Field>
         </div>
+
+        <Card className="space-y-2">
+          <p className="text-xs text-ink-muted">A title at these settings:</p>
+          <p
+            style={{
+              fontFamily: FONTS[headingFont || PRESETS[designPreset].headingFont].stack,
+              fontSize: `calc(${baseSize}px * ${titleSize})`,
+              fontWeight: titleWeight,
+              lineHeight: 1.25,
+            }}
+            className="text-ink"
+          >
+            {title.trim() || "The ferry at dusk"}
+          </p>
+        </Card>
 
         <Card className="space-y-3">
           <Checkbox

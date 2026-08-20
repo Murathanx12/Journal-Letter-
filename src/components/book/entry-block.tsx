@@ -3,7 +3,10 @@ import Link from "next/link";
 
 import { AuthorMark } from "@/components/book/author-mark";
 import { EntryContent } from "@/components/book/entry-content";
+import { EntryOrder } from "@/components/book/entry-order";
+import { DrawingLayer } from "@/components/media/drawing-layer";
 import { EntryMedia } from "@/components/media/media-layer";
+import { splitElementsByLayer } from "@/lib/media/drawing";
 import type { BookMember } from "@/lib/books/queries";
 import type { CompiledEntry } from "@/lib/entries/compile";
 import type { ResolvedDesign } from "@/lib/design/theme";
@@ -23,6 +26,7 @@ export function EntryBlock({
   canEdit,
   isFavorite,
   showActions = true,
+  order,
   mediaUrls,
   className,
 }: {
@@ -33,11 +37,17 @@ export function EntryBlock({
   canEdit: boolean;
   isFavorite?: boolean;
   showActions?: boolean;
+  /**
+   * Where this letter sits among the others written the same day. Absent when
+   * it is the only one — there is nothing to reorder against.
+   */
+  order?: { isFirst: boolean; isLast: boolean };
   /** Signed URLs keyed by storage path. Absent means "no photographs". */
   mediaUrls?: Map<string, string>;
   className?: string;
 }) {
   const urls = mediaUrls ?? new Map<string, string>();
+  const { behind: drawnBehind, front: drawnFront } = splitElementsByLayer(entry.drawing);
 
   return (
     <article className={cn("group", className)} id={`entry-${entry.id}`}>
@@ -62,6 +72,14 @@ export function EntryBlock({
             {isFavorite ? (
               <Star className="h-3.5 w-3.5 fill-current text-brand" aria-label="A favourite" />
             ) : null}
+            {order && canEdit ? (
+              <EntryOrder
+                bookId={bookId}
+                entryId={entry.id}
+                isFirst={order.isFirst}
+                isLast={order.isLast}
+              />
+            ) : null}
             {canEdit ? (
               <Link
                 href={`/books/${bookId}/entries/${entry.id}`}
@@ -76,9 +94,17 @@ export function EntryBlock({
       </header>
 
       {entry.title ? (
+        // Size and weight come from the book's own design, not from a utility
+        // class, so "make the titles bigger" is a setting the reader can change
+        // rather than something only a developer can.
         <h3
-          className="mb-2 text-lg text-ink"
-          style={{ fontFamily: "var(--book-heading-font)" }}
+          className="mb-2 text-ink"
+          style={{
+            fontFamily: "var(--book-heading-font)",
+            fontSize: `calc(var(--book-base-size, 18px) * ${design.titleSize})`,
+            fontWeight: design.titleWeight,
+            lineHeight: 1.25,
+          }}
         >
           {entry.title}
         </h3>
@@ -96,7 +122,18 @@ export function EntryBlock({
         }
       >
         <EntryMedia items={entry.layout} urls={urls}>
-          <EntryContent content={entry.content} />
+          {/*
+            Under the writing, and over it. This is the whole of "does the text
+            stay on top?": a circle drawn round a paragraph goes behind, and a
+            note scribbled across one goes in front.
+
+            Both come before the writing, and `z-index` decides what covers
+            what — an anchor placed after the text would be positioned from
+            whichever page the text ended on. See `EntryMedia`.
+          */}
+          <DrawingLayer elements={drawnBehind} className="z-0" />
+          <DrawingLayer elements={drawnFront} className="z-30" />
+          <EntryContent content={entry.content} mediaUrls={urls} />
         </EntryMedia>
       </div>
 

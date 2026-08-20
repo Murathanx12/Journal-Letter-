@@ -1,7 +1,9 @@
 import { Fragment, type ReactNode } from "react";
 
+import { asImageFlow, asImageWidth, imageFrameStyle } from "@/components/editor/image-frame";
+import { asCrop, croppedAspect, croppedImageStyle, isCropped } from "@/lib/media/crop";
 import { knownFontStack } from "@/lib/design/theme";
-import { asRichTextDoc, type Mark, type RichTextNode } from "@/lib/text/rich-text";
+import { asRichTextDoc, withImageUrls, type Mark, type RichTextNode } from "@/lib/text/rich-text";
 
 /**
  * Renders a stored rich-text document.
@@ -130,13 +132,46 @@ function renderNode(node: RichTextNode, key: string): ReactNode {
       );
 
     case "image": {
+      // A picture whose URL could not be signed — the file is gone, or the
+      // reader is not allowed it — is left out entirely. A broken image icon in
+      // the middle of a letter is worse than a picture that is simply absent.
       const src = safeHref(node.attrs?.src);
       if (!src) return null;
+
       const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
+      const flow = asImageFlow(node.attrs?.flow);
+      const width = asImageWidth(node.attrs?.width);
+      const crop = asCrop(node.attrs?.crop);
+      const cropped = isCropped(crop);
+
+      // A cropped frame has to be told its shape: the server never gets to
+      // measure the photograph, and without this the page would jump as each
+      // picture arrived.
+      const aspect = croppedAspect(
+        crop,
+        Number(node.attrs?.srcWidth) || 1,
+        Number(node.attrs?.srcHeight) || 1,
+      );
+
       return (
-        <figure key={key}>
+        <figure
+          key={key}
+          className="book-image"
+          style={{
+            ...imageFrameStyle(width, flow),
+            ...(cropped
+              ? { aspectRatio: String(aspect), overflow: "hidden", position: "relative" }
+              : null),
+          }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt={alt} loading="lazy" />
+          <img
+            src={src}
+            alt={alt}
+            loading="lazy"
+            className="rounded-[4px]"
+            style={croppedImageStyle(crop)}
+          />
           {typeof node.attrs?.title === "string" && node.attrs.title ? (
             <figcaption className="mt-1 text-center text-xs text-ink-muted">
               {node.attrs.title}
@@ -152,7 +187,19 @@ function renderNode(node: RichTextNode, key: string): ReactNode {
   }
 }
 
-export function EntryContent({ content }: { content: unknown }) {
-  const doc = asRichTextDoc(content);
+/**
+ * @param mediaUrls Signed URLs keyed by storage path. Pictures written into the
+ *   letter store only their path — a signed URL expires within the hour — so
+ *   without this they have nothing to render from. Omit it only where the
+ *   writing is known to hold no pictures.
+ */
+export function EntryContent({
+  content,
+  mediaUrls,
+}: {
+  content: unknown;
+  mediaUrls?: Map<string, string>;
+}) {
+  const doc = mediaUrls ? withImageUrls(content, mediaUrls) : asRichTextDoc(content);
   return <>{renderNodes(doc.content, "n")}</>;
 }

@@ -228,7 +228,7 @@ export default async function CalendarPage({
           </p>
         ) : (
           <BookSurface design={book.resolvedDesign} members={members} className="space-y-12">
-            {dayEntries.map((entry) => (
+            {dayEntries.map((entry, index) => (
               <EntryBlock
                 key={entry.id}
                 entry={entry}
@@ -238,6 +238,11 @@ export default async function CalendarPage({
                 canEdit={entry.authorId === user?.id}
                 isFavorite={favorites.has(entry.id)}
                 mediaUrls={mediaUrls}
+                order={
+                  dayEntries.length > 1
+                    ? { isFirst: index === 0, isLast: index === dayEntries.length - 1 }
+                    : undefined
+                }
               />
             ))}
           </BookSurface>

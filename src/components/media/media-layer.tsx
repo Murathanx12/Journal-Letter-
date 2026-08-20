@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 
+import { croppedAspect, croppedImageStyle, isCropped } from "@/lib/media/crop";
 import { getMask } from "@/lib/media/masks";
 import type { PlacedMedia } from "@/lib/media/placement";
 import { splitByLayer } from "@/lib/media/placement";
@@ -16,14 +17,21 @@ import { cn } from "@/lib/utils/cn";
  * out to be — and turning the page carries the photographs with it.
  */
 
+/** Width ÷ height of the part of a photograph that is actually shown. */
+export function visibleAspect(item: PlacedMedia): number {
+  return croppedAspect(item.crop, 1, item.aspect || 1);
+}
+
 export function stickerStyle(item: PlacedMedia): CSSProperties {
   return {
     "--page": item.page,
     "--x": item.x,
     "--y": item.y,
     "--w": item.width,
-    // Width ÷ height. `aspect` is stored the other way up, as height ÷ width.
-    "--ar": 1 / (item.aspect || 1),
+    // Width ÷ height of what is actually shown. `aspect` is stored the other
+    // way up, as height ÷ width, and a crop changes the shape of the visible
+    // part — so the box has to follow the crop, not the original file.
+    "--ar": visibleAspect(item),
     transform: `rotate(${item.rotation}deg)${item.flipX ? " scaleX(-1)" : ""}`,
     opacity: item.opacity,
     clipPath: getMask(item.mask).clipPath,
@@ -56,14 +64,7 @@ export function PageStickers({
 
         return (
           <div key={item.id} className="page-sticker" style={stickerStyle(item)}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={url}
-              alt={item.alt}
-              className="h-full w-full object-cover"
-              loading="lazy"
-              draggable={false}
-            />
+            <CroppedImage item={item} url={url} />
           </div>
         );
       })}
@@ -103,7 +104,7 @@ export function WrappedMedia({
         float: item.side,
         // A percentage of the column, which is the page: no measuring needed.
         width: `${item.width * 100}%`,
-        aspectRatio: 1 / (item.aspect || 1),
+        aspectRatio: visibleAspect(item),
         shapeOutside: mask.shapeOutside === "none" ? undefined : mask.shapeOutside,
         shapeMargin: rotated ? "1.1em" : "0.9em",
         marginLeft: item.side === "right" ? "1.2em" : 0,
@@ -114,7 +115,22 @@ export function WrappedMedia({
         clipPath: mask.clipPath,
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <CroppedImage item={item} url={url} />
+    </div>
+  );
+}
+
+/**
+ * A photograph, showing only the part that was kept.
+ *
+ * Uncropped it is an ordinary cover-fitted image. Cropped, the box clips and
+ * the picture is enlarged and slid behind it — which is why nothing is lost:
+ * widening the crop later brings the rest straight back.
+ */
+function CroppedImage({ item, url }: { item: PlacedMedia; url: string }) {
+  if (!isCropped(item.crop)) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={url}
         alt={item.alt}
@@ -122,7 +138,20 @@ export function WrappedMedia({
         loading="lazy"
         draggable={false}
       />
-    </div>
+    );
+  }
+
+  return (
+    <span className="relative block h-full w-full overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={item.alt}
+        loading="lazy"
+        draggable={false}
+        style={{ ...croppedImageStyle(item.crop), objectFit: "cover" }}
+      />
+    </span>
   );
 }
 
@@ -144,20 +173,33 @@ export function EntryMedia({
 }) {
   const { behind, front, wrapped } = splitByLayer(items);
 
-  // The writing is given a stacking position of its own. Without it, *any*
-  // positioned sticker would paint over the text, because positioned elements
-  // always paint above unpositioned ones no matter what order they are in — so
-  // "behind the writing" would silently mean "in front of it".
+  /*
+    Both anchors come first, and paint order is decided by `z-index` alone.
+
+    That is not a style preference. An anchor takes no height, but it still has
+    a *position* in the column flow — and a page's photographs are placed
+    relative to their anchor. An anchor written after the writing therefore
+    lands in whichever column the writing happened to end in, and every
+    photograph on the entry moves with it. Putting both at the start pins them
+    to the entry's first page, which is what "page four of this letter" is
+    counted from.
+
+    The writing is given a stacking position of its own for the same reason the
+    z-indexes exist at all: without it, *any* positioned sticker would paint
+    over the text, because positioned elements always paint above unpositioned
+    ones no matter what order they are in — so "behind the writing" would
+    silently mean "in front of it".
+  */
   return (
     <>
       <PageStickers items={behind} urls={urls} className="z-0" />
+      <PageStickers items={front} urls={urls} className="z-20" />
       <div className="relative z-10">
         {wrapped.map((item) => (
           <WrappedMedia key={item.id} item={item} url={urls.get(item.path)} />
         ))}
         {children}
       </div>
-      <PageStickers items={front} urls={urls} className="z-20" />
     </>
   );
 }
